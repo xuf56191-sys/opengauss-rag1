@@ -8,4 +8,4 @@ data/chroma/
 .vscode/
 .DS_Store
 **/chroma/
- src/data/
+src/data/
