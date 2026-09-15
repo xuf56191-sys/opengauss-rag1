@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # 将 src 目录加入 Python 模块搜索路径，确保能正确导入 embed_client
 sys.path.insert(0, str(ROOT / "src"))
 
-from embed_client import embed_texts
+from embed_client1 import embed_texts
 
 # 加载根目录下的 .env 文件
 load_dotenv(ROOT / ".env")

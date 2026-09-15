@@ -9,7 +9,7 @@ from pathlib import Path
 import chromadb
 from dotenv import load_dotenv
 
-# allow `python src/ingest.py` from repo root
+# allow `python src/ingest3.py` from repo root
 # 动态获取项目根目录（当前文件的上一级目录的上一级）
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -17,8 +17,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # 这样即使直接运行 `python src/ingest.py`，也能正确导入 src 下的 chunker 和 embed_client
 sys.path.insert(0, str(ROOT / "src"))
 
-from chunker import chunk_markdown
-from embed_client import embed_texts
+from chunker2 import chunk_markdown
+from embed_client1 import embed_texts
 
 # 加载根目录下的 .env 文件（显式指定路径，避免受运行目录影响）
 load_dotenv(ROOT / ".env")
