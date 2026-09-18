@@ -6,7 +6,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import requests
 from dotenv import load_dotenv
@@ -141,9 +141,14 @@ def call_deepseek(messages: List[Dict], temperature: float = 0.2) -> str:
     return data["choices"][0]["message"]["content"]
 
 
-def answer(query: str, k: int = 3) -> Dict:
-    """检索 -> 拒答判定 -> Prompt -> LLM -> 引用校验"""
-    hr = HybridRetriever()
+def answer(query: str, k: int = 3, hr: Optional[HybridRetriever] = None) -> Dict:
+    """检索 -> 拒答判定 -> Prompt -> LLM -> 引用校验
+
+    hr: 可选外部注入的 HybridRetriever，避免服务层每次请求重建 BM25。
+    CLI 直接调用时保持 hr=None，内部懒加载即可。
+    """
+    if hr is None:
+        hr = HybridRetriever()
     hits = hr.search(query, k=k)
 
     refuse, reason = should_refuse(hits)
