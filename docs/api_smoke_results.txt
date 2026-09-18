@@ -14,12 +14,11 @@ POST /ask in-corpus status=200
 ============================================================
 {
   "query": "enable_dolphin_proto 是干什么的？",
-  "answer": "根据现有资料，`enable_dolphin_proto` 的作用是：\n\n**控制是否打开 MySQL 协议能力** [1]。也就是说，它决定 openGauss 是否启用 Dolphin 提供的 MySQL 协议兼容能力。\n\n- 如果**不配置或配错**：客户端连不上 MySQL 端口 [1]。\n- 它与另外两个配置配合使用 [1]：\n  - `dolphin_server_port`：MySQL 协议监听端口（如 3308），决定连哪个端口；\n  - `dolphin.default_database_name`：协议默认落到哪个物理 B 库。\n\n简单说：**开关打开协议；端口决定连哪；default_database_name 决定默认物理库** [1]。连 Dolphin 时要用 MySQL 协议端口，不要误用 gsql 的 5432 [1][2]。\n\n---\n\n补充说明：资料中只说明了该参数的功能定位和配错后果，**未给出它的具体取值（如 on/off）、默认值或修改方式**。如需这些细节，根据现有文档无法确认，还需要补充对应的参数说明文档。",
+  "answer": "根据现有资料：\n\n**enable_dolphin_proto 是控制是否打开 MySQL 协议能力的开关。** [1]\n\n具体说明：\n\n- **作用**：是否打开 MySQL 协议能力 [1]\n- **不配/配错的后果**：客户端连不上 MySQL 端口 [1]\n\n资料中把它和另外两个配置放在一起对比，三者分工如下 [1]：\n\n| 配置 | 管什么 |\n|---|---|\n| `enable_dolphin_proto` | 是否打开 MySQL 协议能力 |\n| `dolphin_server_port` | MySQL 协议监听端口（如 3308） |\n| `dolphin.default_database_name` | 协议默认落到哪个物理 B 库 |\n\n概括来说：**开关打开协议；端口决定连哪；default_database_name 决定默认物理库。** 连 Dolphin 要用 MySQL 协议端口，不要误用 gsql 的 5432（按实际环境写端口）。[1]\n\n---\n\n补充说明：资料中未给出 `enable_dolphin_proto` 的具体取值（如 on/off）、默认值、修改方式（如是否需要重启）等细节，**根据现有文档无法确认**这些内容。如需这些信息，还缺该参数的官方参数说明或配置示例。",
   "refused": false,
   "refuse_reason": null,
   "cited": [
-    1,
-    2
+    1
   ],
   "invalid_citations": [],
   "citation_valid": true,
@@ -58,7 +57,7 @@ POST /ask out-of-domain status=200
   "query": "今天西安天气怎么样？",
   "answer": "根据现有文档无法确认。当前检索结果与问题相关度过低，已触发代码层拒答，未调用模型生成配置步骤。若是 openGauss 相关问题，请补充配置项名称、兼容模式或连接场景等关键词。",
   "refused": true,
-  "refuse_reason": "low_relevance",
+  "refuse_reason": "low_bm25",
   "cited": [],
   "invalid_citations": [],
   "citation_valid": true,

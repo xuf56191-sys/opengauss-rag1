@@ -1,0 +1,67 @@
+{
+  "note": "离线评测集：source=语料内可答；oos=库外应拒答。keywords 任一命中 top-k 文本或 heading_path 即算召回。",
+  "source": [
+    {
+      "id": "S1",
+      "query": "enable_dolphin_proto 是干什么的？",
+      "keywords": ["enable_dolphin_proto", "MySQL 协议", "协议"]
+    },
+    {
+      "id": "S2",
+      "query": "Peewee 怎么连 openGauss B 兼容模式？",
+      "keywords": ["Peewee", "MySQLDatabase", "3308", "Dolphin"]
+    },
+    {
+      "id": "S3",
+      "query": "为什么 PyMySQL 的 database 参数要和 schema 同名？",
+      "keywords": ["schema", "database", "default_database_name"]
+    },
+    {
+      "id": "S4",
+      "query": "SHOW INDEX 返回的主键名称为什么 Peewee 识别不了？",
+      "keywords": ["PRIMARY", "SHOW INDEX", "get_primary_keys", "pkey"]
+    },
+    {
+      "id": "S5",
+      "query": "Peewee 为什么读不出自增字段 identity？",
+      "keywords": ["auto_increment", "AUTO_INCREMENT", "identity", "extra"]
+    },
+    {
+      "id": "S6",
+      "query": "错误密码时 Peewee 认证失败抛什么异常？",
+      "keywords": ["514", "InternalError", "auth", "认证"]
+    },
+    {
+      "id": "S7",
+      "query": "批量插入为什么要用 as_rowcount？",
+      "keywords": ["as_rowcount", "批量", "lastrowid"]
+    },
+    {
+      "id": "S8",
+      "query": "重复键冲突时 Peewee 应该捕获什么异常？",
+      "keywords": ["IntegrityError", "1062", "重复键", "OperationalError"]
+    }
+  ],
+  "oos": [
+    {
+      "id": "O1",
+      "query": "今天西安天气怎么样？",
+      "expect_refuse": true
+    },
+    {
+      "id": "O2",
+      "query": "Python 的 GIL 是什么？",
+      "expect_refuse": true
+    },
+    {
+      "id": "O3",
+      "query": "帮我写一首关于春天的唐诗",
+      "expect_refuse": true
+    },
+    {
+      "id": "O4",
+      "query": "小米公司今年营收多少？",
+      "expect_refuse": true
+    }
+  ]
+}
