@@ -45,7 +45,7 @@
 - 口径：小样本标定，非生产阈值；语料变大后需重跑 peek_signals
 
 ## Phase6 离线评测暴露的拒答误放行
-- 评测集：data/eval_cases.json（来源题 8 + 越界题 4），脚本 src/eval6.py
+- 评测集：data/eval_cases.json（来源题 8 + 越界题 4），脚本 src/eval8.py
 - 检索：纯向量 R@1=87.5%（S1 enable_dolphin_proto 未进 top1）、R@3=100%；混合 R@1/R@3=100%
 - 初版 AND 拒答在越界题上仅 25%：GIL/唐诗/公司营收 的中文单字 BM25 虚高（2.3~4.8），但 min_dist>0.55
 - 改为 OR：max_bm25 < 2.0（low_bm25）或 min_vec_dist > 0.55（high_vector_distance）→ 拒
