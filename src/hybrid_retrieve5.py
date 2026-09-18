@@ -63,12 +63,12 @@ def extract_identifiers(query: str) -> List[str]:
 class HybridRetriever:
     """混合检索器：同时使用向量语义检索和 BM25 关键词检索"""
 
-    def __init__(self):
+    def __init__(self, collection: str = COLLECTION):
         import chromadb
 
-        # 连接 Chroma 持久化客户端并获取集合
+        # 连接 Chroma 持久化客户端并获取集合（collection 可指定，便于切片消融对比）
         self.client = chromadb.PersistentClient(path=CHROMA_DIR)
-        self.col = self.client.get_collection(COLLECTION)
+        self.col = self.client.get_collection(collection)
 
         # 一次性把库里所有文档、元数据和 ID 全部取出来，用于构建 BM25 索引
         got = self.col.get(include=["documents", "metadatas"])
