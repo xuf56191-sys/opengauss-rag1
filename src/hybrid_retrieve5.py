@@ -19,7 +19,8 @@ from embed_client1 import embed_texts
 
 # 加载 .env 环境变量，读取 Chroma 存储路径和集合名
 load_dotenv(ROOT / ".env")
-CHROMA_DIR = os.getenv("CHROMA_DIR", str(ROOT / "data" / "chroma"))
+_raw_chroma = os.getenv("CHROMA_DIR") or str(ROOT / "data" / "chroma")
+CHROMA_DIR = str(Path(_raw_chroma) if Path(_raw_chroma).is_absolute() else (ROOT / _raw_chroma))
 COLLECTION = "opengauss_docs"
 
 # simple tokenizer for mixed Chinese/English/config identifiers
@@ -82,30 +83,34 @@ class HybridRetriever:
         corpus_tokens = [tokenize(d) for d in self.docs]
         self.bm25 = BM25Okapi(corpus_tokens)
 
-    def _vector_ranked(self, query: str, k: int) -> List[str]:
-        """向量检索通道：把查询转向量，去 Chroma 里找最相似的 k 个文档 ID"""
+    def _vector_ranked(self, query: str, k: int) -> Tuple[List[str], Dict[str, float]]:
+        """向量通道：返回 (按相似度排序的 id 列表, {id: 余弦距离})"""
         qvec = embed_texts([query])[0]
         res = self.col.query(
             query_embeddings=[qvec],
             n_results=k,
             include=["distances"],
         )
-        # Chroma 返回的结果已经按相似度排好序，直接返回 ID 列表
-        return res["ids"][0]
+        ids = res["ids"][0]
+        dists = res["distances"][0]
+        # Chroma: distance 越小越相似；建 id -> distance 映射
+        return ids, dict(zip(ids, dists))
 
-    def _bm25_ranked(self, query: str, k: int) -> List[str]:
-        """BM25 检索通道：对查询分词，计算 BM25 得分，返回得分最高的 k 个文档 ID"""
+    def _bm25_ranked(self, query: str, k: int) -> Tuple[List[str], Dict[str, float]]:
+        """BM25 通道：返回 (按得分排序的 id 列表, {id: BM25 原始分})"""
         tokens = tokenize(query)
         scores = self.bm25.get_scores(tokens)
-        # 按得分从高到低排序，取前 k 个
         ranked = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
-        return [self.ids[i] for i in ranked[:k]]
+        top_ids = [self.ids[i] for i in ranked[:k]]
+        # 只给进入候选池的文档保留原始分即可
+        id_to_score = {self.ids[i]: float(scores[i]) for i in ranked[:k]}
+        return top_ids, id_to_score
 
     def search(self, query: str, k: int = 3, pool: int = 10) -> List[Dict]:
         """混合检索主入口：合并两路召回结果，用 RRF 重新排序，返回最终 Top-K"""
         # 1. 分别从两个通道各取 pool（默认10）个候选文档
-        vec_ids = self._vector_ranked(query, pool)
-        bm_ids = self._bm25_ranked(query, pool)
+        vec_ids, vec_dist = self._vector_ranked(query, pool)
+        bm_ids, bm_score = self._bm25_ranked(query, pool)
 
         # 2. RRF（Reciprocal Rank Fusion，倒数排序融合）
         # RRF 的核心思想：不直接比较两路分数的绝对值，而是比较“排名”
@@ -159,6 +164,8 @@ class HybridRetriever:
                     # 分别记录在两路通道里的排名，便于分析 RRF 的融合效果
                     "vector_rank": vec_ids.index(doc_id) + 1 if doc_id in vec_ids else None,
                     "bm25_rank": bm_ids.index(doc_id) + 1 if doc_id in bm_ids else None,
+                    "bm25_raw_score": bm_score.get(doc_id, 0.0),
+                    "vector_distance": vec_dist.get(doc_id, None),
                 }
             )
         return out
@@ -193,6 +200,13 @@ def main():
                 f"path={path!r}"
             )
             print(f"     {preview}...")
+            print(
+                f"  #{i} rrf={hit['score']:.5f} "
+                f"bm25_raw={hit['bm25_raw_score']:.4f} "
+                f"vec_dist={hit['vector_distance']:.4f} "
+                f"vec_rank={hit['vector_rank']} bm25_rank={hit['bm25_rank']} "
+                f"path={path!r}"
+            )
 
 
 if __name__ == "__main__":

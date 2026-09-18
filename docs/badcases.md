@@ -36,3 +36,10 @@
 - Q2: enable_dolphin_proto 仍 top1=连接前提
 - Q3: 保持
 - 遗留: 短标题块易靠前；后续可对纯标题块降权或增大 pool
+
+## Phase4 检索层拒答阈值校准
+- 数据来源：src/peek_signals.py（2026 实测）
+- 库内 max_bm25: 4.37 / 13.80 / 14.47；min_dist: 0.27 / 0.35 / 0.47
+- 库外天气：max_bm25=1.24；min_dist=0.65
+- 规则：no_hits 或 (max_bm25 < 2.0 且 min_dist > 0.55) → 拒，不调 LLM
+- 口径：小样本标定，非生产阈值；语料变大后需重跑 peek_signals

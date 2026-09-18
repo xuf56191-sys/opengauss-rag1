@@ -20,8 +20,9 @@ from embed_client1 import embed_texts
 # 加载根目录下的 .env 文件
 load_dotenv(ROOT / ".env")
 
-# 获取 Chroma 持久化目录（默认在 data/chroma 下）
-CHROMA_DIR = os.getenv("CHROMA_DIR", str(ROOT / "data" / "chroma"))
+# 获取 Chroma 持久化目录（默认在 data/chroma 下；相对路径相对仓库根）
+_raw_chroma = os.getenv("CHROMA_DIR") or str(ROOT / "data" / "chroma")
+CHROMA_DIR = str(Path(_raw_chroma) if Path(_raw_chroma).is_absolute() else (ROOT / _raw_chroma))
 
 # 集合名称（与 ingest.py 中写入时保持完全一致）
 COLLECTION = "opengauss_docs"
