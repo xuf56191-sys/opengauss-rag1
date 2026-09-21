@@ -120,6 +120,7 @@ def main():
     # 待处理的文件列表（目前只有 peewee-notes.md，后续可以扩展）
     files = [
         ROOT / "personal" / "peewee-notes.md",
+        ROOT / "personal" / "opengauss-peewee-cheatsheet.md",
     ]
 
     total = 0

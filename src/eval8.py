@@ -231,7 +231,10 @@ def write_report(src: Dict, oos: Dict, out_path: Path) -> str:
     lines.append("## 口径")
     lines.append("")
     lines.append("- Recall@k：Top-k 文本或 `heading_path` 命中任一关键词即算命中。")
-    lines.append("- 拒答规则：`no_hits` 或 `max_bm25_raw < 2.0` 或 `min_vec_dist > 0.55`（OR，评测后收紧）。")
+    lines.append(
+        f"- 拒答规则：`no_hits` 或 `max_bm25_raw < {REFUSE_BM25_MAX}` "
+        f"或 `min_vec_dist > {REFUSE_DIST_MIN}`（OR，与 answer6 同源）。"
+    )
     lines.append("- 阈值来自 peek_signals + 本评测集标定；语料扩充后需重标。")
     lines.append("")
 

@@ -6,7 +6,7 @@ openGauss **配置问答助手**（纯 RAG，手写主链路）。语料来自�
 
 ## 背景
 
-参与 openGauss 开源适配时发现：B 库创建、schema 与 PyMySQL `database` 同名、`enable_dolphin_proto` / native 密码等配置点散落在文档与个人笔记中，新手很难一次查准。本项目将个人整理的 `personal/peewee-notes.md` 切片入库，提供：
+参与 openGauss 开源适配时发现：B 库创建、schema 与 PyMySQL `database` 同名、`enable_dolphin_proto` / native 密码等配置点散落在文档与个人笔记中，新手很难一次查准。本项目将个人笔记与任务速查（`personal/peewee-notes.md`、`personal/opengauss-peewee-cheatsheet.md`）切片入库，提供：
 
 - 混合检索（BM25 + 向量 + 加权 RRF + 标识符提权）
 - 基于资料的生成与 `[n]` 引用
@@ -84,7 +84,7 @@ copy .env.example .env
 python src\ingest3.py
 ```
 
-预期：`chunks=20`（以 `peewee-notes.md` 实际切片为准），`collection_count` 与之一致。
+预期：打印每个文件的 upsert 进度；当前语料（笔记 + 速查）约 **120** chunks，以 `collection_count` 实际输出为准。
 
 ### 命令行问答
 
@@ -129,22 +129,22 @@ python src\chunk_ablate9.py
 ```text
 no_hits
 或 max(bm25_raw_score) < 2.0          → low_bm25
-或 min(vector_distance) > 0.55        → high_vector_distance
+或 min(vector_distance) > 0.52        → high_vector_distance
 ```
 
-阈值来自 `peek_signals` + 评测集小样本标定，语料扩充后需重标。
+阈值来自 `peek_signals` + 评测集标定。语料扩充到约 120 chunks 后，库外中文题 BM25 明显虚高，`DIST_MIN` 从 0.55 收紧为 **0.52**；语料再变必须重标。
 
 ## 评测结果（仓库内实测，非生产）
 
-### 纯向量 vs 混合（8 道来源题 + 4 道越界题）
+### 纯向量 vs 混合（语料 ~120 chunks；8 来源题 + 4 越界题）
 
 | 方法 | Recall@1 | Recall@3 |
 |------|----------|----------|
 | 纯向量 | 87.50% | 100% |
 | 混合 BM25+向量 | 100% | 100% |
 
-- 纯向量 Top1 失败例：`enable_dolphin_proto`（标识符被语义相近片段冲淡）→ 混合后回到 Top1  
-- 越界题代码层拒答：4/4（100%）
+- 纯向量 Top1 失败例（扩语料后）：S6 认证异常类问题；混合检索 8/8 进 Top1  
+- 越界题代码层拒答：**4/4（100%）**（`DIST_MIN=0.52` 重标定后）
 
 ### 切片长度消融（混合检索，关键词 Recall）
 

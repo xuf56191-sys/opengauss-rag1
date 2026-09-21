@@ -22,8 +22,9 @@ import re
 
 # 校准数据见 peek_signals / data/eval_cases.json / docs/eval_report.md
 # 中文单字分词会让库外题 BM25 虚高，故不能只依赖 bm25；语义距离过远也要拒。
+# 语料扩到 ~120 chunks 后：库内 top min_dist≈0.27~0.36，库外 GIL≈0.533 → DIST_MIN=0.52
 REFUSE_BM25_MAX = 2.0
-REFUSE_DIST_MIN = 0.55
+REFUSE_DIST_MIN = 0.52
 REFUSE_MESSAGE = (
     "根据现有文档无法确认。"
     "当前检索结果与问题相关度过低，已触发代码层拒答，未调用模型生成配置步骤。"
@@ -36,7 +37,7 @@ def should_refuse(hits: List[Dict]) -> tuple:
     规则（评测后收紧）：
     - 无检索结果 → no_hits
     - max_bm25 < 2.0  → 词法证据不足
-    - min_vec_dist > 0.55 → 语义不像（任一条成立即拒）
+    - min_vec_dist > 0.52 → 语义不像（任一条成立即拒）
     OR 而非 AND：库外题常见「BM25 虚高但向量很远」。
     """
     if not hits:

@@ -51,3 +51,12 @@
 - 改为 OR：max_bm25 < 2.0（low_bm25）或 min_vec_dist > 0.55（high_vector_distance）→ 拒
 - 收紧后：越界拒答 4/4；API smoke 库内仍 answered，天气 refused=low_bm25
 - embed_client1 增加 SSLError/超时退避重试，避免评测中断
+
+## 扩语料后拒答重标定（120 chunks）
+- 入库：peewee-notes + opengauss-peewee-cheatsheet → collection_count=120
+- 检索：混合 R@1 仍 100%；纯向量 R@1 87.5%（失败题变为 S6 认证异常）
+- 拒答问题：中文长文档使库外 BM25 虚高（天气 top1 bm25≈13）；GIL min_dist=0.533 在旧阈值 0.55 下误放行，OOS 仅 75%
+- 库内 top min_dist 约 0.27~0.36；库外约 0.53~0.68
+- 调整：REFUSE_DIST_MIN 0.55 → **0.52**（卡在库内最大约 0.36 与库外最小 0.533 之间）
+- 结果：OOS 拒答 4/4；enable_dolphin_proto 仍正常生成并引用
+- 教训：语料分布变化后必须重跑 peek_signals / eval8，不能沿用旧阈值
