@@ -9,3 +9,6 @@ data/chroma/
 .DS_Store
 **/chroma/
 src/data/
+# personal interview notes — keep local only
+docs/项目面试清单.md
+项目面试清单_本地勿提交.md
