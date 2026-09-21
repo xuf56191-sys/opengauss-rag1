@@ -19,7 +19,7 @@ load_dotenv(ROOT / ".env", override=True)
 
 # 导入评测需要的模块（noqa: E402 是为了忽略“导入语句不在文件顶部”的 flake8 警告）
 from embed_client1 import embed_texts  # noqa: E402    # 复用嵌入函数
-from answer6 import should_refuse      # noqa: E402    # 复用拒答判定逻辑
+from answer6 import should_refuse, REFUSE_BM25_MAX, REFUSE_DIST_MIN  # noqa: E402
 from hybrid_retrieve5 import HybridRetriever, CHROMA_DIR, COLLECTION  # noqa: E402
 
 
