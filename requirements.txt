@@ -5,3 +5,5 @@ uvicorn
 python-dotenv
 requests
 httpx
+pydantic
+pytest

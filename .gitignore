@@ -9,6 +9,8 @@ data/chroma/
 .DS_Store
 **/chroma/
 src/data/
-# personal interview notes ¡ª keep local only
-docs/ÏîÄ¿ÃæÊÔÇåµ¥.md
-ÏîÄ¿ÃæÊÔÇåµ¥_±¾µØÎğÌá½».md
+
+# ä¸ªäººé¢è¯•ææ–™â€”â€”åªç•™æœ¬åœ°ï¼Œä¸æäº¤
+docs/é¡¹ç›®é¢è¯•æ¸…å•.md
+é¡¹ç›®é¢è¯•æ¸…å•_æœ¬åœ°å‹¿æäº¤.md
+.pytest_cache/
