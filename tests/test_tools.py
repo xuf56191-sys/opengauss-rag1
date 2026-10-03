@@ -199,3 +199,8 @@ def test_call_tool_invalid_args() -> None:
 def test_tool_registry_matches_specs() -> None:
     spec_names = {s["name"] for s in tools_mod.TOOL_SPECS}
     assert spec_names == set(tools_mod.TOOLS)
+
+def test_search_docs_empty_hits_still_ok() -> None:
+    res = tools_mod.search_docs("x", hr=FakeRetriever(hits=[]))  # type: ignore[arg-type]
+    assert res.ok is True
+    assert res.data["count"] == 0
