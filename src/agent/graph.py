@@ -1,14 +1,22 @@
-"""阶段 3：LangGraph 最小 Agent 图。
+"""阶段 3–4：LangGraph Agent 图 + 证据/拒答门闩。
 
-图形（与阶段 0 设计一致）：
+图形：
 
     START → agent ──(有待执行工具且未超步)──→ tools → agent → …
-                 └─(无工具 / 出错 / 步数用尽)─→ final → END
+                 └─(无工具 / 出错 / 步数用尽)─→ guard ─→ final → END
 
 职责划分：
 - agent  ：一次 LLM 调用；决定「调用哪些工具」或「直接给最终文本」
-- tools  ：执行 agent 要的工具（复用 agent/tools.py 的 call_tool）
-- final  ：收口；若还没有文本则强制再要一次（不带工具），并做 citation 解析
+- tools  ：执行 agent 要的工具（复用 agent/tools.py 的 call_tool），tool_error 重试一次
+- guard  ：阶段 4 的门闩——保证「没有证据就不许下结论」
+- final  ：收口与 citation 解析
+
+阶段 4 三条门闩规则（可用测试证明）：
+1) 检索/工具层已判拒答 → 以检索层为准，用固定拒答文案覆盖模型输出；
+2) 已有证据（观测到资料片段）→ 放行模型答案；
+3) 零证据：
+   - 问题像 openGauss 配置域 → 确定性回退调 rag_answer（再判定，或换成有据回答）；
+   - 否则 → 直接拒答（reason=no_evidence），不接受模型的自由发挥。
 
 复用：LLM 出口仍是 tool_calling._post_chat（便于单测 monkeypatch）；
 hr（HybridRetriever）通过 LangGraph 的 config.configurable 传入，不放进状态。
@@ -27,7 +35,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 import answer6  # noqa: E402
-from hybrid_retrieve5 import HybridRetriever  # noqa: E402
+from hybrid_retrieve5 import HybridRetriever, extract_identifiers  # noqa: E402
 from langchain_core.runnables import RunnableConfig  # noqa: E402
 from langgraph.graph import END, START, StateGraph  # noqa: E402
 
@@ -44,6 +52,47 @@ except ImportError:  # 允许直接以脚本方式运行
     from tools import call_tool  # type: ignore
 
 DEFAULT_MAX_STEPS = 3
+
+# 工具级重试：只对「像是临时故障」的错误重试，参数/名字错误重试没有意义
+RETRYABLE_TOOL_ERRORS = {"tool_error"}
+
+# 领域判定关键词（启发式）：命中才认为「这个问题本该查我们的语料」
+DOMAIN_KEYWORDS = (
+    "opengauss",
+    "peewee",
+    "pymysql",
+    "dolphin",
+    "兼容",
+    "协议",
+    "端口",
+    "schema",
+    "database",
+    "索引",
+    "主键",
+    "自增",
+    "事务",
+    "字符集",
+    "连接",
+    "配置",
+    "参数",
+    "驱动",
+    "表",
+    "sql",
+    "orm",
+    "数据库",
+)
+
+
+def _looks_domain_relevant(query: str) -> bool:
+    """启发式判断问题是否属于本项目语料覆盖的领域。
+
+    命中任一条即可：包含 snake_case 配置项，或包含领域关键词。
+    这是规则而非模型判断，便于测试与解释；语料扩大后应同步维护关键词。
+    """
+    if extract_identifiers(query):
+        return True
+    lowered = query.lower()
+    return any(kw in lowered for kw in DOMAIN_KEYWORDS)
 
 
 def _hr_from_config(config: Optional[RunnableConfig]) -> Optional[HybridRetriever]:
@@ -121,13 +170,16 @@ def tools_node(state: AgentState, config: Optional[RunnableConfig] = None) -> Di
             )
         else:
             result = call_tool(name, args, hr=hr)
+            # 临时性故障（网络/向量库抖动）重试一次；参数或工具名错误不重试
+            if (not result.ok) and result.error_code in RETRYABLE_TOOL_ERRORS:
+                result = call_tool(name, args, hr=hr)
 
         if result.ok:
             if name == "rag_answer":
                 contexts = result.data.get("contexts") or []
                 ctx_count = max(ctx_count, len(contexts))
                 if result.data.get("refused"):
-                    # 阶段 3 只记录；阶段 4 会据此强制拒答
+                    # 记录检索层判定；guard 节点会据此强制拒答
                     updates["refused"] = True
                     updates["refusal_reason"] = result.data.get("refuse_reason")
             else:
@@ -141,6 +193,7 @@ def tools_node(state: AgentState, config: Optional[RunnableConfig] = None) -> Di
                 "ok": result.ok,
                 "error_code": result.error_code,
                 "latency_ms": result.latency_ms,
+                "origin": "agent",
             }
         )
         messages.append(
@@ -158,6 +211,79 @@ def tools_node(state: AgentState, config: Optional[RunnableConfig] = None) -> Di
         "observed_context_count": ctx_count,
         **updates,
     }
+
+
+# --------------------------------------------------------------------- guard
+
+
+def guard_node(state: AgentState, config: Optional[RunnableConfig] = None) -> Dict[str, Any]:
+    """阶段 4 门闩：没有证据就不允许给出结论。
+
+    规则顺序：
+    1) 系统级错误 → 保持错误提示，不额外判拒答；
+    2) 工具层已判拒答 → 以检索层为准，覆盖模型话术；
+    3) 已有证据 → 放行；
+    4) 零证据 → 领域内问题回退 rag_answer；否则直接拒答。
+    """
+    hr = _hr_from_config(config)
+    query = state.get("query") or ""
+    updates: Dict[str, Any] = {}
+
+    if state.get("error"):
+        return updates
+
+    # 规则 2：检索层说不可答，就不接受模型自己的说法
+    if state.get("refused"):
+        updates["answer"] = answer6.REFUSE_MESSAGE
+        updates["citations"] = []
+        updates["citation_valid"] = True
+        return updates
+
+    # 规则 3：有证据，放行
+    if state.get("observed_context_count", 0) > 0:
+        return updates
+
+    # 规则 4：零证据
+    if not _looks_domain_relevant(query):
+        updates["refused"] = True
+        updates["refusal_reason"] = "no_evidence"
+        updates["answer"] = answer6.REFUSE_MESSAGE
+        return updates
+
+    # 领域内问题却没走工具 → 确定性回退，直接调 rag_answer 判定与作答
+    result = call_tool("rag_answer", {"query": query}, hr=hr)
+    log = list(state.get("tool_calls") or [])
+    log.append(
+        {
+            "name": "rag_answer",
+            "args": {"query": query},
+            "ok": result.ok,
+            "error_code": result.error_code,
+            "latency_ms": result.latency_ms,
+            "origin": "guard_fallback",
+        }
+    )
+    updates["tool_calls"] = log
+
+    if result.ok and result.data.get("refused"):
+        updates["refused"] = True
+        updates["refusal_reason"] = result.data.get("refuse_reason")
+        updates["answer"] = answer6.REFUSE_MESSAGE
+        updates["citations"] = []
+        updates["citation_valid"] = True
+        return updates
+
+    if result.ok:
+        contexts = result.data.get("contexts") or []
+        updates["answer"] = result.data.get("answer") or state.get("answer") or ""
+        updates["observed_context_count"] = max(state.get("observed_context_count", 0), len(contexts))
+        return updates
+
+    # 回退本身失败（例如 LLM 故障）：宁可拒答，也不放行无据答案
+    updates["refused"] = True
+    updates["refusal_reason"] = f"fallback_failed:{result.error_code}"
+    updates["answer"] = answer6.REFUSE_MESSAGE
+    return updates
 
 
 # --------------------------------------------------------------------- final
@@ -179,11 +305,13 @@ def final_node(state: AgentState, config: Optional[RunnableConfig] = None) -> Di
             error = f"{type(exc).__name__}: {exc}"
 
     n_ctx = state.get("observed_context_count", 0)
-    cite = (
-        answer6.parse_citations(answer, n_ctx)
-        if n_ctx
-        else {"cited": [], "invalid_citations": [], "citation_valid": True}
-    )
+    if state.get("refused"):
+        # 拒答句不该带引用
+        cite = {"cited": [], "invalid_citations": [], "citation_valid": True}
+    elif n_ctx:
+        cite = answer6.parse_citations(answer, n_ctx)
+    else:
+        cite = {"cited": [], "invalid_citations": [], "citation_valid": True}
 
     return {
         "answer": answer,
@@ -198,15 +326,15 @@ def final_node(state: AgentState, config: Optional[RunnableConfig] = None) -> Di
 
 def route_after_agent(state: AgentState) -> str:
     if state.get("error"):
-        return "final"
+        return "guard"
     if not state.get("pending_tool_calls"):
-        return "final"
+        return "guard"
     return "tools"
 
 
 def route_after_tools(state: AgentState) -> str:
     if state.get("step_count", 0) >= state.get("max_steps", DEFAULT_MAX_STEPS):
-        return "final"
+        return "guard"
     return "agent"
 
 
@@ -214,15 +342,17 @@ def route_after_tools(state: AgentState) -> str:
 
 
 def build_graph():
-    """编译状态图：START → agent ⇄ tools → final → END。"""
+    """编译状态图：START → agent ⇄ tools → guard → final → END。"""
     graph = StateGraph(AgentState)
     graph.add_node("agent", agent_node)
     graph.add_node("tools", tools_node)
+    graph.add_node("guard", guard_node)
     graph.add_node("final", final_node)
 
     graph.add_edge(START, "agent")
-    graph.add_conditional_edges("agent", route_after_agent, {"tools": "tools", "final": "final"})
-    graph.add_conditional_edges("tools", route_after_tools, {"agent": "agent", "final": "final"})
+    graph.add_conditional_edges("agent", route_after_agent, {"tools": "tools", "guard": "guard"})
+    graph.add_conditional_edges("tools", route_after_tools, {"agent": "agent", "guard": "guard"})
+    graph.add_edge("guard", "final")
     graph.add_edge("final", END)
 
     return graph.compile()
