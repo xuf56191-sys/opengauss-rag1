@@ -1,0 +1,22 @@
+.git/
+.gitignore
+.venv/
+.idea/
+.vscode/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# 密钥绝不进镜像
+.env
+
+# 向量库由 volume 挂载（体积大且可重建）
+data/chroma/
+**/chroma/
+
+# 文档与测试不参与运行
+docs/
+tests/
+
+# 本地个人材料
+项目面试清单_本地勿提交.md

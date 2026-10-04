@@ -1,0 +1,26 @@
+# 单服务 compose：一个容器同时提供 POST /ask（RAG 基线）与 POST /agent（单 Agent）
+#
+# 用法：
+#   1) 本机先完成入库：python src/ingest3.py（会在 ./data/chroma 落盘）
+#   2) cp .env.example .env 并填好 SILICONFLOW_API_KEY / DEEPSEEK_API_KEY
+#   3) docker compose up --build
+#   4) 健康检查：curl http://127.0.0.1:8000/health
+#
+# 说明：
+# - 密钥通过 env_file 注入，不打进镜像
+# - 向量库以只读挂载复用，避免容器内重复嵌入（省钱省时）
+# - 如需在容器内入库：docker compose run --rm api python src/ingest3.py
+services:
+  api:
+    build: .
+    image: opengauss-rag:0.1
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # 显式指向挂载点；容器内路径与仓库根一致，模块内相对路径逻辑无需改动
+      CHROMA_DIR: /app/data/chroma
+    volumes:
+      - ./data/chroma:/app/data/chroma:ro
+    restart: unless-stopped
