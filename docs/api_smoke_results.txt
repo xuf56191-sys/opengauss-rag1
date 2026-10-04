@@ -6,7 +6,7 @@ GET /health status=200
   "status": "ok",
   "collection": "opengauss_docs",
   "chroma_dir": "D:\\PPT文档\\RAG新项目\\opengauss-rag\\data\\chroma",
-  "chunks": 20
+  "chunks": 120
 }
 
 ============================================================
@@ -14,38 +14,39 @@ POST /ask in-corpus status=200
 ============================================================
 {
   "query": "enable_dolphin_proto 是干什么的？",
-  "answer": "根据现有资料：\n\n**enable_dolphin_proto 是控制是否打开 MySQL 协议能力的开关。** [1]\n\n具体说明：\n\n- **作用**：是否打开 MySQL 协议能力 [1]\n- **不配/配错的后果**：客户端连不上 MySQL 端口 [1]\n\n资料中把它和另外两个配置放在一起对比，三者分工如下 [1]：\n\n| 配置 | 管什么 |\n|---|---|\n| `enable_dolphin_proto` | 是否打开 MySQL 协议能力 |\n| `dolphin_server_port` | MySQL 协议监听端口（如 3308） |\n| `dolphin.default_database_name` | 协议默认落到哪个物理 B 库 |\n\n概括来说：**开关打开协议；端口决定连哪；default_database_name 决定默认物理库。** 连 Dolphin 要用 MySQL 协议端口，不要误用 gsql 的 5432（按实际环境写端口）。[1]\n\n---\n\n补充说明：资料中未给出 `enable_dolphin_proto` 的具体取值（如 on/off）、默认值、修改方式（如是否需要重启）等细节，**根据现有文档无法确认**这些内容。如需这些信息，还缺该参数的官方参数说明或配置示例。",
+  "answer": "根据现有资料，`enable_dolphin_proto` 的作用是：**控制是否打开 MySQL 协议能力**（即是否启用 Dolphin 提供的 MySQL 协议入口）[1][2]。\n\n具体要点：\n- 它和 `dolphin_server_port` 一起，用于提供 MySQL 协议入口 [1]。\n- 若该项不配置或配错，会导致**客户端连不上 MySQL 端口** [2]。\n\n补充说明：资料中未给出该参数的取值范围、默认值或具体设置语法，如需这些细节，根据现有文档无法确认。",
   "refused": false,
   "refuse_reason": null,
   "cited": [
-    1
+    1,
+    2
   ],
   "invalid_citations": [],
   "citation_valid": true,
   "contexts": [
     {
+      "id": "personal/opengauss-peewee-cheatsheet.md::11",
+      "heading_path": "2.5 Dolphin",
+      "score": 0.03624801692226336,
+      "bm25_raw_score": 15.371026807694783,
+      "vector_distance": 0.35918915271759033,
+      "preview": "### 2.5 Dolphin\n\nDolphin 在这个任务中承担两类作用：\n\n1. 为 openGauss B 兼容数据库补充 MySQL 风格语法、函数、类型和行为；\n2. 通过 `enable_dolphin_proto` 和 `dolphin_server_port` 提供 MySQL 协议入口。\n\nPyMyS"
+    },
+    {
       "id": "personal/peewee-notes.md::2",
       "heading_path": "2. 连接前提（能口述 5 步）",
-      "score": 0.0361592505854801,
-      "bm25_raw_score": 13.79817391209702,
+      "score": 0.035444964871194376,
+      "bm25_raw_score": 15.42108264209384,
       "vector_distance": 0.48147672414779663,
       "preview": "## 2. 连接前提（能口述 5 步）\n\n按你实际操作顺序写关键词，不要抄长 SQL：\n\n1. **B 库**：如何确认/创建 B 兼容库？编码？\nCREATE DATABASE proto_test_db DBCOMPATIBILITY 'B' ENCODING 'UTF8';\n\n2. **用户与 schema**："
     },
     {
-      "id": "personal/peewee-notes.md::3",
-      "heading_path": "2. 连接前提（能口述 5 步）",
-      "score": 0.015851814516129034,
-      "bm25_raw_score": 2.7340148784531966,
-      "vector_distance": 0.4709552526473999,
-      "preview": "物理库。\\\n连 Dolphin 用 MySQL 协议端口，不要误用 gsql 的 5432（按你环境写实际端口）。\n\n5. **转义与认证**：为什么可能要 `standard_conforming_strings`？客户端认证要注意什么？\n\n转义 `standard_conforming_strings`：**\\\nP"
-    },
-    {
-      "id": "personal/peewee-notes.md::11",
-      "heading_path": "4. 兼容问题故事 A：主键 / SHOW INDEX（Plugin）",
-      "score": 0.015653235653235655,
-      "bm25_raw_score": 3.202145121618765,
-      "vector_distance": 0.49215763807296753,
-      "preview": "## 4. 兼容问题故事 A：主键 / SHOW INDEX（Plugin）\n\n> 对应：Plugin Issue #1626 · Plugin PR #2553 · 实习任务 #35  \n> 链接：[[Plugin#2553]{.underline}](https://gitcode.com/opengauss/Pl"
+      "id": "personal/opengauss-peewee-cheatsheet.md::67",
+      "heading_path": "1. 这个任务的核心目标是什么？",
+      "score": 0.015251897860593513,
+      "bm25_raw_score": 4.264012614105784,
+      "vector_distance": 0.47696805000305176,
+      "preview": "### 1. 这个任务的核心目标是什么？\n\n验证 Peewee 能否通过 PyMySQL 和 Dolphin MySQL 协议使用 openGauss B 兼容数据库，并识别阻碍真实 ORM 使用的协议、元数据、SQL、类型和错误语义差异。"
     }
   ]
 }
@@ -57,34 +58,34 @@ POST /ask out-of-domain status=200
   "query": "今天西安天气怎么样？",
   "answer": "根据现有文档无法确认。当前检索结果与问题相关度过低，已触发代码层拒答，未调用模型生成配置步骤。若是 openGauss 相关问题，请补充配置项名称、兼容模式或连接场景等关键词。",
   "refused": true,
-  "refuse_reason": "low_bm25",
+  "refuse_reason": "high_vector_distance",
   "cited": [],
   "invalid_citations": [],
   "citation_valid": true,
   "contexts": [
     {
-      "id": "personal/peewee-notes.md::14",
-      "heading_path": "5. 兼容问题故事 B：自增 extra 大小写（Server）",
-      "score": 0.015564903846153846,
-      "bm25_raw_score": 1.2406271541007126,
-      "vector_distance": 0.6485689878463745,
-      "preview": "在 B 模式下使用 `a.atttypmod` 保留 `(p,s)`；\n* 精度修改限定在 `sql_compatibility='B'`，避免影响 Shark/D 模式等其他兼容模式。\n\n**验证方式与结果：**\n\n运行时替换视图后实测：\n\n```\nid     | integer | integer       |"
+      "id": "personal/opengauss-peewee-cheatsheet.md::92",
+      "heading_path": "附录 A：一天快速吃透计划",
+      "score": 0.016195134849286093,
+      "bm25_raw_score": 13.093544944187373,
+      "vector_distance": 0.5600280165672302,
+      "preview": "## 附录 A：一天快速吃透计划"
     },
     {
-      "id": "personal/peewee-notes.md::4",
-      "heading_path": "3. 我验证过的四类用例",
-      "score": 0.015151515151515152,
-      "bm25_raw_score": 0.9584092693972557,
-      "vector_distance": 0.658913254737854,
-      "preview": "## 3. 我验证过的四类用例\n\n每类写：**测了什么 · 1 个成功例 · 1 个边界/失败例 · 结论**"
+      "id": "personal/opengauss-peewee-cheatsheet.md::87",
+      "heading_path": "21. DECIMAL 问题怎样定位？",
+      "score": 0.015226287915262397,
+      "bm25_raw_score": 8.688151176232733,
+      "vector_distance": 0.6249787211418152,
+      "preview": "### 21. DECIMAL 问题怎样定位？\n\n原始系统视图返回 `number/number`，且 `COLUMN_TYPE` 调用 `format_type` 时未传 `atttypmod`，精度丢失；server 侧保留 typmod，Plugin 元数据映射把 number/numeric 转成 decima"
     },
     {
-      "id": "personal/peewee-notes.md::3",
-      "heading_path": "2. 连接前提（能口述 5 步）",
-      "score": 0.014705882352941176,
-      "bm25_raw_score": 0.8577077657867256,
-      "vector_distance": 0.669261634349823,
-      "preview": "物理库。\\\n连 Dolphin 用 MySQL 协议端口，不要误用 gsql 的 5432（按你环境写实际端口）。\n\n5. **转义与认证**：为什么可能要 `standard_conforming_strings`？客户端认证要注意什么？\n\n转义 `standard_conforming_strings`：**\\\nP"
+      "id": "personal/opengauss-peewee-cheatsheet.md::57",
+      "heading_path": "9. 面试官重点问题怎么回答",
+      "score": 0.014775815217391304,
+      "bm25_raw_score": 6.124712076124047,
+      "vector_distance": 0.6289114952087402,
+      "preview": "## 9. 面试官重点问题怎么回答"
     }
   ]
 }
