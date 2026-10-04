@@ -83,6 +83,7 @@ flowchart LR
 | `src/peek_signals.py` | 打印 bm25_raw / vec_dist，用于阈值标定 |
 | `src/ask_smoke.py` | HTTP smoke（`httpx`，`trust_env=False`） |
 | `src/agent_eval.py` | Agent 离线评测：26 题 8 指标 |
+| `src/agent_cli.py` | Agent 交互式命令行（`:help` / `:tools` / `:quit`） |
 
 ### Agent 扩展包（`src/agent/`）
 
@@ -144,6 +145,16 @@ python src\answer6.py "今天西安天气怎么样？"
 
 第二条应输出 `refused=True`，原因多为 `low_bm25` 或 `high_vector_distance`。
 
+### 交互式命令行（最方便试 Agent）
+
+```powershell
+.\.venv\Scripts\python src\agent_cli.py                          # 进入对话模式
+.\.venv\Scripts\python src\agent_cli.py --once "enable_dolphin_proto 是干什么的？"
+.\.venv\Scripts\python src\agent_cli.py --max-steps 4            # 调步数上限（1~6）
+```
+
+对话模式内：直接输入问题；`:tools` 看工具；`:help` 帮助；`:quit` 退出。输出含 `refused / tools_used / 每次调用的参数与来源 / steps / citations / 延迟`。
+
 ### HTTP 服务
 
 ```powershell
@@ -198,10 +209,10 @@ python src\agent_eval.py       # Agent：26 题 8 项指标（真实调用模型
 ### 单元测试
 
 ```powershell
-.\.venv\Scripts\python -m pytest tests -q     # 当前 55 passed
+.\.venv\Scripts\python -m pytest tests -q     # 当前 59 passed
 ```
 
-覆盖：工具层返回契约、Tool Calling 消息序列、图的流转与步数收口、门闩三规则、工具/LLM 重试、API 出入参与 `/ask` 回归。测试全部离线（注入假检索器 + monkeypatch 大模型出口），不消耗 API 额度。
+覆盖：工具层返回契约、Tool Calling 消息序列、图的流转与步数收口、门闩三规则、工具/LLM 重试、API 出入参与 `/ask` 回归、CLI 入口。测试全部离线（注入假检索器 + monkeypatch 大模型出口），不消耗 API 额度（`--durations` 最长 0.05s）。
 
 ## 拒答规则（当前实现）
 
