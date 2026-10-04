@@ -116,7 +116,7 @@ def agent_node(state: AgentState, config: Optional[RunnableConfig] = None) -> Di
     with_tools = step_count < max_steps - 1
 
     try:
-        data = tc._post_chat(tc._build_payload(messages, with_tools=with_tools, temperature=0.2))
+        data = tc.post_chat_with_retry(tc._build_payload(messages, with_tools=with_tools, temperature=0.2))
     except Exception as exc:
         return {
             "messages": messages,
@@ -298,7 +298,7 @@ def final_node(state: AgentState, config: Optional[RunnableConfig] = None) -> Di
         # 兜底：循环结束时还没有文本，再要一次（不带工具）
         messages = list(state.get("messages") or [])
         try:
-            data = tc._post_chat(tc._build_payload(messages, with_tools=False, temperature=0.2))
+            data = tc.post_chat_with_retry(tc._build_payload(messages, with_tools=False, temperature=0.2))
             answer = (data.get("choices") or [{}])[0].get("message", {}).get("content") or ""
         except Exception as exc:
             answer = tc.LLM_ERROR_MESSAGE

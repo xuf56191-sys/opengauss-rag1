@@ -111,6 +111,37 @@ def _build_payload(
     return payload
 
 
+# 可重试的 LLM 故障：网络类异常 + 429/5xx。4xx（除 429）是请求本身的问题，重试无意义
+RETRYABLE_HTTP_STATUS = {429, 500, 502, 503, 504}
+
+# 重试次数：默认 3；单测里可设为 1 以避免等待
+LLM_MAX_ATTEMPTS = int(os.getenv("AGENT_LLM_MAX_ATTEMPTS", "3"))
+
+
+def post_chat_with_retry(payload: Dict[str, Any], max_attempts: Optional[int] = None) -> Dict[str, Any]:
+    """带退避重试的 LLM 调用；_post_chat 仍是单次调用的测试替换点。"""
+    attempts = max_attempts or LLM_MAX_ATTEMPTS
+    last_error: Optional[Exception] = None
+    for attempt in range(attempts):
+        try:
+            return _post_chat(payload)
+        except Exception as exc:
+            message = str(exc)
+            name = type(exc).__name__
+            retryable = (
+                any(f"HTTP {code}" in message for code in RETRYABLE_HTTP_STATUS)
+                or any(key in name for key in ("ConnectionError", "Timeout", "SSLError"))
+            )
+            if not retryable:
+                raise
+            last_error = exc
+
+        if attempt < attempts - 1:
+            time.sleep(1.0 * (attempt + 1))
+
+    raise RuntimeError(f"LLM 重试 {attempts} 次后仍失败: {last_error}")
+
+
 def _parse_tool_arguments(raw: str) -> tuple:
     """模型给的 arguments 是字符串，可能不是合法 JSON。"""
     text = (raw or "").strip()
@@ -153,7 +184,7 @@ def run_once(
         rounds = round_idx + 1
 
         try:
-            data = _post_chat(_build_payload(messages, with_tools=with_tools, temperature=temperature))
+            data = post_chat_with_retry(_build_payload(messages, with_tools=with_tools, temperature=temperature))
         except Exception as exc:
             return {
                 "query": query,

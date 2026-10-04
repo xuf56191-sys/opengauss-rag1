@@ -117,17 +117,43 @@ def test_graph_stops_at_max_steps_and_forces_text(monkeypatch: pytest.MonkeyPatc
 
 def test_graph_llm_error_short_circuits(monkeypatch: pytest.MonkeyPatch) -> None:
     def boom(payload: Dict[str, Any], timeout: int = 120) -> Dict[str, Any]:
-        raise RuntimeError("LLM HTTP 500: oops")
+        raise RuntimeError("LLM HTTP 401: invalid api key")
 
     monkeypatch.setattr(tc, "_post_chat", boom)
+    monkeypatch.setattr(tc, "LLM_MAX_ATTEMPTS", 1)  # 4xx 不可重试，且避免测试等待
 
     out = g.run_agent(DOMAIN_Q, hr=FakeRetriever(_hits(1)))  # type: ignore[arg-type]
 
     assert out["error"] is not None
-    assert "LLM HTTP 500" in out["error"]
+    assert "LLM HTTP 401" in out["error"]
     assert out["answer"] == tc.LLM_ERROR_MESSAGE
     # 系统故障不等于「资料不足」，不应记成拒答
     assert out["refused"] is False
+
+
+def test_graph_retries_transient_llm_error_then_succeeds(monkeypatch: pytest.MonkeyPatch) -> None:
+    """503/连接类错误应重试；重试成功后流程正常继续（用非领域 query 隔离，避免触发真实回退）。"""
+    captured: List[Dict[str, Any]] = []
+    responses = [_resp(content="重试成功后的回答。")]
+    calls = {"n": 0}
+
+    def flaky(payload: Dict[str, Any], timeout: int = 120) -> Dict[str, Any]:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("LLM HTTP 503: service unavailable")
+        return _scripted(responses, captured)(payload)
+
+    monkeypatch.setattr(tc, "_post_chat", flaky)
+    monkeypatch.setattr(tc, "LLM_MAX_ATTEMPTS", 2)
+    monkeypatch.setattr(tc.time, "sleep", lambda _s: None)  # 测试不等待
+
+    out = g.run_agent("你好", hr=FakeRetriever())  # type: ignore[arg-type]
+
+    assert calls["n"] == 2          # 第一次失败 + 重试一次
+    assert out["error"] is None     # 重试后不再报错
+    # 非领域且零证据 → 由门闩拒答（与 LLM 文本无关，这正是门闩的作用）
+    assert out["refused"] is True
+    assert out["refusal_reason"] == "no_evidence"
 
 
 def test_graph_flags_out_of_range_citation(monkeypatch: pytest.MonkeyPatch) -> None:

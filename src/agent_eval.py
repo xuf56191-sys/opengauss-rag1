@@ -124,6 +124,8 @@ def run_one(case: Dict[str, Any], hr: HybridRetriever) -> Dict[str, Any]:
             "citation_valid": dumped["citation_valid"],
             "citation_present": len(dumped["citations"]) > 0,
         },
+        # 基础设施故障（LLM/网络）与「模型答错」必须分开统计，否则会误判模型能力
+        "infra_error": dumped["error"] is not None,
         "elapsed_ms": round((time.perf_counter() - t0) * 1000, 2),
     }
 
@@ -138,34 +140,54 @@ def _rate(items: List[Optional[bool]]) -> Optional[float]:
 def summarize(results: List[Dict[str, Any]]) -> Dict[str, Any]:
     in_corpus = [r for r in results if r["type"] == "in_corpus"]
     oos = [r for r in results if r["type"] == "oos"]
+    # 基础设施故障不参与「模型能力」类指标，单独报 error rate
+    scored = [r for r in results if not r["infra_error"]]
+    scored_in = [r for r in scored if r["type"] == "in_corpus"]
+    scored_oos = [r for r in scored if r["type"] == "oos"]
 
-    tool_sel = [r["checks"]["tool_selection"] for r in in_corpus]
-    params = [r["checks"]["parameter"] for r in in_corpus]
-    tasks = [r["checks"]["task_success"] for r in results]
-    cit_valid = [r["checks"]["citation_valid"] for r in results]
-    cit_present = [r["checks"]["citation_present"] for r in in_corpus]
-    oos_refuse = [r["refused"] for r in oos]
+    tool_sel = [r["checks"]["tool_selection"] for r in scored_in]
+    params = [r["checks"]["parameter"] for r in scored_in]
+    tasks = [r["checks"]["task_success"] for r in scored]
+    cit_valid = [r["checks"]["citation_valid"] for r in scored]
+    cit_present = [r["checks"]["citation_present"] for r in scored_in]
+    oos_refuse = [r["refused"] for r in scored_oos if r["type"] == "oos"]
+    latencies = sorted(r["latency_ms"] for r in scored)
+
+    def _pct_at(p: float) -> float:
+        if not latencies:
+            return 0.0
+        idx = min(len(latencies) - 1, int(round(p * (len(latencies) - 1))))
+        return latencies[idx]
 
     n = len(results)
     return {
         "total": n,
         "in_corpus": len(in_corpus),
         "oos": len(oos),
+        "scored": len(scored),
+        "infra_errors": n - len(scored),
+        "infra_error_rate": (n - len(scored)) / n if n else 0.0,
         "tool_selection_acc": _rate(tool_sel),
         "no_tool_rate": (
-            sum(1 for r in in_corpus if not r["tools_used"]) / len(in_corpus)
-            if in_corpus
+            sum(1 for r in scored_in if not r["tools_used"]) / len(scored_in)
+            if scored_in
             else None
         ),
         "parameter_acc": _rate(params),
         "task_success_rate": _rate(tasks),
         "citation_valid_rate": _rate(cit_valid),
         "citation_coverage": _rate(cit_present),
-        "oos_refusal_rate": (sum(1 for v in oos_refuse if v) / len(oos)) if oos else None,
-        "avg_tool_calls": sum(len(r["tool_calls"]) for r in results) / n if n else 0.0,
-        "avg_steps": sum(r["steps"] for r in results) / n if n else 0.0,
-        "avg_latency_ms": sum(r["latency_ms"] for r in results) / n if n else 0.0,
-        "errors": [r for r in results if r["error"]],
+        "oos_refusal_rate": (sum(1 for v in oos_refuse if v) / len(oos_refuse)) if oos_refuse else None,
+        # 假拒答：语料内问题被误判为「资料不足」（与幻觉相反方向的错误）
+        "false_refusal_rate": (
+            sum(1 for r in scored_in if r["refused"]) / len(scored_in) if scored_in else None
+        ),
+        "avg_tool_calls": sum(len(r["tool_calls"]) for r in scored) / len(scored) if scored else 0.0,
+        "avg_steps": sum(r["steps"] for r in scored) / len(scored) if scored else 0.0,
+        "avg_latency_ms": sum(latencies) / len(latencies) if latencies else 0.0,
+        "p50_latency_ms": _pct_at(0.50),
+        "p95_latency_ms": _pct_at(0.95),
+        "errors": [r for r in results if r["infra_error"]],
     }
 
 
@@ -186,31 +208,38 @@ def write_report(summary: Dict[str, Any], results: List[Dict[str, Any]]) -> None
     lines.append("")
     lines.append("| 指标 | 结果 | 说明 |")
     lines.append("|------|------|------|")
+    lines.append(f"| Infrastructure Error Rate | {_pct(summary['infra_error_rate'])} | LLM/网络故障题数占比（**不计入模型能力**） |")
     lines.append(f"| Tool Selection Accuracy | {_pct(summary['tool_selection_acc'])} | 语料内问题是否调用可接受工具（命中任一即可） |")
     lines.append(f"| 零工具调用率 | {_pct(summary['no_tool_rate'])} | 语料内问题一次工具都没调的比例（越低越好） |")
     lines.append(f"| Parameter Accuracy | {_pct(summary['parameter_acc'])} | 配置名 / 查询关键词是否出现在工具参数里 |")
-    lines.append(f"| Task Success Rate | {_pct(summary['task_success_rate'])} | 拒答行为符合预期 + 答案命中关键信息 |")
+    lines.append(f"| Task Success Rate | {_pct(summary['task_success_rate'])} | 拒答行为符合预期 + 答案命中关键信息（仅统计非故障题） |")
     lines.append(f"| Citation Valid Rate | {_pct(summary['citation_valid_rate'])} | `citation_valid=true` 占比 |")
-    lines.append(f"| Citation Coverage | {_pct(summary['citation_coverage'])} | 语料内回答真的带 `[n]` 的比例（ABC-4） |")
+    lines.append(f"| Citation Coverage | {_pct(summary['citation_coverage'])} | 语料内回答真的带 `[n]` 的比例（ABC-7） |")
     lines.append(f"| OOS Refusal Rate | {_pct(summary['oos_refusal_rate'])} | 库外问题被拒答的比例 |")
+    lines.append(f"| 假拒答率（语料内） | {_pct(summary['false_refusal_rate'])} | 语料内问题被误判「资料不足」的比例（越低越好） |")
     lines.append(f"| Average Tool Calls | {summary['avg_tool_calls']:.2f} | 每题平均工具调用次数 |")
     lines.append(f"| Average Steps | {summary['avg_steps']:.2f} | 每题平均 LLM 轮数 |")
     lines.append(f"| Average Latency | {summary['avg_latency_ms']:.0f} ms | 端到端平均耗时 |")
+    lines.append(f"| P50 / P95 Latency | {summary['p50_latency_ms']:.0f} / {summary['p95_latency_ms']:.0f} ms | 分布差异大时比均值更有意义（ABC-8） |")
+    lines.append("")
+    lines.append(f"- 计分题数：{summary['scored']} / {summary['total']}（排除 {summary['infra_errors']} 条基础设施故障）")
     lines.append("")
     lines.append("## 逐题明细")
     lines.append("")
-    lines.append("| ID | 类型 | Query | refused | 工具 | 步骤 | 引用 | citation_valid | 任务成功 | 延迟(ms) |")
-    lines.append("|----|------|-------|---------|------|------|------|----------------|----------|----------|")
+    lines.append("| ID | 类型 | Query | refused | 工具 | 步骤 | 引用 | citation_valid | 任务成功 | 故障 | 延迟(ms) |")
+    lines.append("|----|------|-------|---------|------|------|------|----------------|----------|------|----------|")
     for r in results:
         tools = ",".join(r["tools_used"]) or "-"
         lines.append(
             f"| {r['id']} | {r['type']} | {r['query']} | {r['refused']} | {tools} | {r['steps']} | "
-            f"{r['citations']} | {r['citation_valid']} | {r['checks']['task_success']} | {r['latency_ms']:.0f} |"
+            f"{r['citations']} | {r['citation_valid']} | {r['checks']['task_success']} | "
+            f"{'INFRA' if r['infra_error'] else '-'} | {r['latency_ms']:.0f} |"
         )
     lines.append("")
 
-    failed = [r for r in results if not r["checks"]["task_success"]]
-    lines.append("## 未通过用例（badcase 候选）")
+    failed = [r for r in results if (not r["checks"]["task_success"]) and not r["infra_error"]]
+    infra = [r for r in results if r["infra_error"]]
+    lines.append("## 未通过用例（badcase 候选，已排除基础设施故障）")
     lines.append("")
     if not failed:
         lines.append("- 本次无未通过用例。")
@@ -225,13 +254,14 @@ def write_report(summary: Dict[str, Any], results: List[Dict[str, Any]]) -> None
             lines.append(f"- 答案摘录：{r['answer'][:220].replace(chr(10), ' ')}")
             lines.append("")
 
-    errs = summary.get("errors") or []
-    if errs:
-        lines.append("## 执行异常")
-        lines.append("")
-        for r in errs:
-            lines.append(f"- {r['id']}：{r['error']}")
-        lines.append("")
+    lines.append("## 基础设施故障（不计入模型能力）")
+    lines.append("")
+    if not infra:
+        lines.append("- 本次无。")
+    else:
+        for r in infra:
+            lines.append(f"- {r['id']}（{r['query']}）：error={r['error']}")
+    lines.append("")
 
     REPORT_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
     RAW_PATH.write_text(json.dumps({"summary": {k: v for k, v in summary.items() if k != "errors"}, "results": results}, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -268,10 +298,15 @@ def main(argv: Optional[List[str]] = None) -> int:
     write_report(summary, results)
 
     print("=" * 60)
-    print(f"total={summary['total']} task_success={_pct(summary['task_success_rate'])}")
+    print(f"total={summary['total']} scored={summary['scored']} infra_errors={summary['infra_errors']}")
+    print(f"task_success={_pct(summary['task_success_rate'])}")
     print(f"tool_selection={_pct(summary['tool_selection_acc'])} param={_pct(summary['parameter_acc'])}")
     print(f"citation_valid={_pct(summary['citation_valid_rate'])} coverage={_pct(summary['citation_coverage'])}")
-    print(f"oos_refusal={_pct(summary['oos_refusal_rate'])} avg_tools={summary['avg_tool_calls']:.2f} avg_latency={summary['avg_latency_ms']:.0f}ms")
+    print(f"oos_refusal={_pct(summary['oos_refusal_rate'])} avg_tools={summary['avg_tool_calls']:.2f}")
+    print(
+        f"latency avg={summary['avg_latency_ms']:.0f}ms "
+        f"p50={summary['p50_latency_ms']:.0f}ms p95={summary['p95_latency_ms']:.0f}ms"
+    )
     print(f"[saved] {REPORT_PATH}")
     print(f"[saved] {RAW_PATH}")
     return 0
