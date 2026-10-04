@@ -24,11 +24,39 @@
 - 修改：guard 规则 4b——确定性回退调用 `rag_answer`；它若有据回答则替换模型答案，若判拒答则拒答，若自身失败则拒答（`fallback_failed:*`）
 - 修改后：单测覆盖三条分支；`tool_calls` 里以 `origin=guard_fallback` 标记，便于评测区分「模型主动调用」与「门闩补救」
 
-## ABC-4（待处理）：无引用被当作「引用合法」
+## ABC-4（已量化）：无引用被当作「引用合法」
 
 - 现象：答案没有任何 `[n]` 时 `citation_valid=True`
-- 原因：当前 `parse_citations` 只校验「越界」，不校验「必须引用」
-- 计划：阶段 5/6 在评测中单独统计「有据回答的引用覆盖率」，避免把「空引用」误算成通过
+- 原因：`parse_citations` 只校验「越界」，不校验「必须引用」
+- 阶段 6 量化：Agent Eval 26 题中，语料内 20 题的 **Citation Coverage = 75%**，即 A1/A2/A3/A4/A11 五题的回答**没有任何 `[n]`**
+- 根因（比 ABC-4 原判断更具体）：Agent 直接基于 `search_docs` / `get_config_detail` 的观察结果自由作答，**没有经过 `answer6` 那套「编号资料 + 强制引用」的 Prompt**
+- 计划：`final` 阶段引入统一的「有据但无引用」标记（例如新增 `grounded_no_citation`），评测中单独统计；或对这类回答补一轮受约束的引用标注
+
+## ABC-6：带点号的配置名被 get_config_detail 拒绝
+
+- 问题：`dolphin.default_database_name 的作用是什么？`（A3）
+- 原始行为：模型正确选择了 `get_config_detail`，参数 `dolphin.default_database_name`，工具返回
+  `ok=false, error_code=invalid_config_name`（耗时 0ms，说明在校验阶段就被拒绝）
+- 原因：`tools.py` 的配置名校验正则 `^[A-Za-z_][A-Za-z0-9_]*$` **不允许点号**，而该配置项名里含 `.`
+- 模型的自救：自动降级为两次 `search_docs`，并在答案里**主动说明**「我尝试用 get_config_detail 查询被拒绝，所以内容来自文档检索」——这是结构化错误码（`error_code`）带来的正面效果
+- 修改：未改代码（保留真实边界）；已列入改进项：允许 `[A-Za-z0-9_.]+` 或提供「配置项别名解析」
+- 修改后结果：该题仍判为任务成功（答案命中关键词），但工具选择与延迟受影响（steps=3、29.9s）
+
+## ABC-7：Agent 回答的引用覆盖率低于 /ask
+
+- 现象：同一问题 `/ask` 通常带 `[1][2]`，`/agent` 有 25% 的语料内回答完全无引用
+- 原因：`/ask` 的 Prompt 强制编号引用；Agent 的 final 答案来自模型对工具观察的自由总结，未强制
+- 影响：可追溯性下降；评测里 `citation_valid=True` 有「空验证」成分
+- 修改：阶段 6 新增 **Citation Coverage** 指标把它显性化（不掩盖）
+- 修改后结果：指标可量化（75%），后续优化方向明确
+
+## ABC-8：延迟分布极不均衡
+
+- 现象：Agent Eval 平均 9160ms，但最短 654ms、最长 34518ms
+- 原因：① 工具调用次数不同（1 vs 2~3）；② `rag_answer` 内部含一次完整 LLM 生成，单次可达 16.7s（A11）；③ 部分题目模型连续两次 `search_docs`
+- 影响：只看平均值会误导（P50 远小于均值）
+- 计划：报告中补 P50/P95；可对 `max_steps` 与工具选择做成本控制
+
 
 ## ABC-5（环境类）：临时故障与网络
 

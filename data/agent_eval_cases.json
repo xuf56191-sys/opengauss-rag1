@@ -1,0 +1,265 @@
+{
+  "note": "Agent 离线评测集（小样本自建）。in_corpus=语料内问题应给有据回答；oos=库外问题应拒答。expected_tools=可接受的工具集合（命中任一即算工具选择正确）；param_check 用于参数准确率；answer_keywords 任一命中即算内容达标。",
+  "cases": [
+    {
+      "id": "A1",
+      "query": "enable_dolphin_proto 是干什么的？",
+      "type": "in_corpus",
+      "expected_tools": ["get_config_detail", "rag_answer"],
+      "param_check": {"kind": "config_name", "value": "enable_dolphin_proto"},
+      "answer_keywords": ["协议"],
+      "expect_refuse": false,
+      "expect_citation": true
+    },
+    {
+      "id": "A2",
+      "query": "dolphin_server_port 控制什么？",
+      "type": "in_corpus",
+      "expected_tools": ["get_config_detail", "rag_answer"],
+      "param_check": {"kind": "config_name", "value": "dolphin_server_port"},
+      "answer_keywords": ["端口"],
+      "expect_refuse": false,
+      "expect_citation": true
+    },
+    {
+      "id": "A3",
+      "query": "dolphin.default_database_name 的作用是什么？",
+      "type": "in_corpus",
+      "expected_tools": ["rag_answer", "search_docs"],
+      "param_check": {"kind": "query_keyword", "value": "default_database_name"},
+      "answer_keywords": ["库"],
+      "expect_refuse": false,
+      "expect_citation": true
+    },
+    {
+      "id": "A4",
+      "query": "Peewee 怎么连 openGauss B 兼容模式？",
+      "type": "in_corpus",
+      "expected_tools": ["rag_answer", "search_docs"],
+      "param_check": {"kind": "query_keyword", "value": "Peewee"},
+      "answer_keywords": ["Peewee"],
+      "expect_refuse": false,
+      "expect_citation": true
+    },
+    {
+      "id": "A5",
+      "query": "为什么 PyMySQL 的 database 参数要和 schema 同名？",
+      "type": "in_corpus",
+      "expected_tools": ["rag_answer", "search_docs"],
+      "param_check": {"kind": "query_keyword", "value": "schema"},
+      "answer_keywords": ["schema"],
+      "expect_refuse": false,
+      "expect_citation": true
+    },
+    {
+      "id": "A6",
+      "query": "gsql 密码和 MySQL native 密码有什么区别？",
+      "type": "in_corpus",
+      "expected_tools": ["rag_answer", "search_docs"],
+      "param_check": {"kind": "query_keyword", "value": "native"},
+      "answer_keywords": ["native"],
+      "expect_refuse": false,
+      "expect_citation": true
+    },
+    {
+      "id": "A7",
+      "query": "SHOW INDEX 返回的主键名为什么 Peewee 识别不了？",
+      "type": "in_corpus",
+      "expected_tools": ["rag_answer", "search_docs"],
+      "param_check": {"kind": "query_keyword", "value": "SHOW INDEX"},
+      "answer_keywords": ["PRIMARY"],
+      "expect_refuse": false,
+      "expect_citation": true
+    },
+    {
+      "id": "A8",
+      "query": "Peewee 为什么识别不出自增字段？",
+      "type": "in_corpus",
+      "expected_tools": ["rag_answer", "search_docs"],
+      "param_check": {"kind": "query_keyword", "value": "自增"},
+      "answer_keywords": ["auto_increment", "AUTO_INCREMENT"],
+      "expect_refuse": false,
+      "expect_citation": true
+    },
+    {
+      "id": "A9",
+      "query": "重复键冲突时 Peewee 应该捕获什么异常？",
+      "type": "in_corpus",
+      "expected_tools": ["rag_answer", "search_docs"],
+      "param_check": {"kind": "query_keyword", "value": "重复键"},
+      "answer_keywords": ["IntegrityError", "1062"],
+      "expect_refuse": false,
+      "expect_citation": true
+    },
+    {
+      "id": "A10",
+      "query": "批量插入为什么要用 as_rowcount？",
+      "type": "in_corpus",
+      "expected_tools": ["rag_answer", "search_docs"],
+      "param_check": {"kind": "query_keyword", "value": "as_rowcount"},
+      "answer_keywords": ["as_rowcount"],
+      "expect_refuse": false,
+      "expect_citation": true
+    },
+    {
+      "id": "A11",
+      "query": "错误密码时 Peewee 报的错误码 514 是什么情况？",
+      "type": "in_corpus",
+      "expected_tools": ["rag_answer", "search_docs"],
+      "param_check": {"kind": "query_keyword", "value": "514"},
+      "answer_keywords": ["514"],
+      "expect_refuse": false,
+      "expect_citation": true
+    },
+    {
+      "id": "A12",
+      "query": "为什么要给连接用户设置 standard_conforming_strings=off？",
+      "type": "in_corpus",
+      "expected_tools": ["rag_answer", "search_docs"],
+      "param_check": {"kind": "query_keyword", "value": "standard_conforming_strings"},
+      "answer_keywords": ["转义", "反斜杠"],
+      "expect_refuse": false,
+      "expect_citation": true
+    },
+    {
+      "id": "A13",
+      "query": "用 SQL_ASCII 建库会导致什么字符类型问题？",
+      "type": "in_corpus",
+      "expected_tools": ["rag_answer", "search_docs"],
+      "param_check": {"kind": "query_keyword", "value": "SQL_ASCII"},
+      "answer_keywords": ["varbinary", "blob", "UTF8"],
+      "expect_refuse": false,
+      "expect_citation": true
+    },
+    {
+      "id": "A14",
+      "query": "openGauss 的 B 兼容模式是什么？",
+      "type": "in_corpus",
+      "expected_tools": ["rag_answer", "search_docs"],
+      "param_check": {"kind": "query_keyword", "value": "兼容"},
+      "answer_keywords": ["兼容"],
+      "expect_refuse": false,
+      "expect_citation": true
+    },
+    {
+      "id": "A15",
+      "query": "3308 端口是什么端口，和 gsql 端口有什么区别？",
+      "type": "in_corpus",
+      "expected_tools": ["rag_answer", "search_docs"],
+      "param_check": {"kind": "query_keyword", "value": "3308"},
+      "answer_keywords": ["3308"],
+      "expect_refuse": false,
+      "expect_citation": true
+    },
+    {
+      "id": "A16",
+      "query": "DECIMAL 精度丢失问题是怎么定位和修复的？",
+      "type": "in_corpus",
+      "expected_tools": ["rag_answer", "search_docs"],
+      "param_check": {"kind": "query_keyword", "value": "DECIMAL"},
+      "answer_keywords": ["typmod", "precision", "decimal"],
+      "expect_refuse": false,
+      "expect_citation": true
+    },
+    {
+      "id": "A17",
+      "query": "Peewee 的 atomic 事务回滚怎么验证？",
+      "type": "in_corpus",
+      "expected_tools": ["rag_answer", "search_docs"],
+      "param_check": {"kind": "query_keyword", "value": "atomic"},
+      "answer_keywords": ["回滚", "rollback", "atomic"],
+      "expect_refuse": false,
+      "expect_citation": true
+    },
+    {
+      "id": "A18",
+      "query": "Dolphin 插件在这个任务里做什么？",
+      "type": "in_corpus",
+      "expected_tools": ["rag_answer", "search_docs"],
+      "param_check": {"kind": "query_keyword", "value": "Dolphin"},
+      "answer_keywords": ["协议", "MySQL"],
+      "expect_refuse": false,
+      "expect_citation": true
+    },
+    {
+      "id": "A19",
+      "query": "自增 extra 大小写问题的根因是什么？",
+      "type": "in_corpus",
+      "expected_tools": ["rag_answer", "search_docs"],
+      "param_check": {"kind": "query_keyword", "value": "extra"},
+      "answer_keywords": ["AUTO_INCREMENT", "auto_increment"],
+      "expect_refuse": false,
+      "expect_citation": true
+    },
+    {
+      "id": "A20",
+      "query": "openGauss B 库应该用什么字符集建库？",
+      "type": "in_corpus",
+      "expected_tools": ["rag_answer", "search_docs"],
+      "param_check": {"kind": "query_keyword", "value": "字符集"},
+      "answer_keywords": ["UTF8"],
+      "expect_refuse": false,
+      "expect_citation": true
+    },
+    {
+      "id": "O1",
+      "query": "今天西安天气怎么样？",
+      "type": "oos",
+      "expected_tools": [],
+      "param_check": {"kind": "none"},
+      "answer_keywords": [],
+      "expect_refuse": true,
+      "expect_citation": false
+    },
+    {
+      "id": "O2",
+      "query": "Python 的 GIL 是什么？",
+      "type": "oos",
+      "expected_tools": [],
+      "param_check": {"kind": "none"},
+      "answer_keywords": [],
+      "expect_refuse": true,
+      "expect_citation": false
+    },
+    {
+      "id": "O3",
+      "query": "帮我写一首关于春天的唐诗",
+      "type": "oos",
+      "expected_tools": [],
+      "param_check": {"kind": "none"},
+      "answer_keywords": [],
+      "expect_refuse": true,
+      "expect_citation": false
+    },
+    {
+      "id": "O4",
+      "query": "小米公司今年营收多少？",
+      "type": "oos",
+      "expected_tools": [],
+      "param_check": {"kind": "none"},
+      "answer_keywords": [],
+      "expect_refuse": true,
+      "expect_citation": false
+    },
+    {
+      "id": "O5",
+      "query": "红烧肉怎么做才好吃？",
+      "type": "oos",
+      "expected_tools": [],
+      "param_check": {"kind": "none"},
+      "answer_keywords": [],
+      "expect_refuse": true,
+      "expect_citation": false
+    },
+    {
+      "id": "O6",
+      "query": "Kubernetes 的 Pod 和 Deployment 有什么区别？",
+      "type": "oos",
+      "expected_tools": [],
+      "param_check": {"kind": "none"},
+      "answer_keywords": [],
+      "expect_refuse": true,
+      "expect_citation": false
+    }
+  ]
+}
