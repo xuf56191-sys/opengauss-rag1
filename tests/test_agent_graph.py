@@ -390,6 +390,9 @@ def test_invalid_args_is_not_retried(monkeypatch: pytest.MonkeyPatch) -> None:
 
     def counting(name: str, args: Dict[str, Any], hr: Any = None) -> tc.ToolResult:
         calls.append(name)
+        if name == "rag_answer":
+            # 门闩的领域回退：这里必须打桩，否则会真实调用 LLM（测试必须离线）
+            return tc.ToolResult.failure(name, "tool_error", "stubbed in test", 0.0)
         return real_call_tool(name, args, hr=hr)
 
     monkeypatch.setattr(g, "call_tool", counting)

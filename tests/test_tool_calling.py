@@ -138,6 +138,8 @@ def test_llm_failure_returns_error_without_tool_calls(monkeypatch: pytest.Monkey
         raise RuntimeError("LLM HTTP 500: oops")
 
     monkeypatch.setattr(tc, "_post_chat", boom)
+    monkeypatch.setattr(tc, "LLM_MAX_ATTEMPTS", 1)  # 测试不等待重试
+    monkeypatch.setattr(tc.time, "sleep", lambda _s: None)
 
     out = tc.run_once("x", hr=FakeRetriever())  # type: ignore[arg-type]
 

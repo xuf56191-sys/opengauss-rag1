@@ -87,6 +87,14 @@
 - 计划：报告中补 P50/P95；可对 `max_steps` 与工具选择做成本控制
 
 
+## ABC-12：测试隔离漏洞——单测偷偷调用了真实 LLM
+
+- 现象：单测总耗时从 1s 涨到 6s/20s，`--durations` 显示两个用例各占 2~3s
+- 原因：① 门闩的领域回退会调用**真实** `rag_answer` → `answer6.answer` → 真实 DeepSeek；测试里只替换了 `_post_chat`，但 `answer6` 自己发 HTTP，替换不到；② LLM 重试默认 3 次，失败用例要等退避睡眠
+- 影响：测试**非确定性**（依赖网络与额度）、变慢，且会让「测试全部离线」的 README 声明变成假话
+- 修改：① 该用例对 `rag_answer` 打桩（返回 `tool_error`），不再走真实链路；② 重试用例设 `LLM_MAX_ATTEMPTS=1` 并把 `time.sleep` 置空
+- 修改后结果：`55 passed in 1.14s`，`--durations` 最长 0.01s，测试回归纯离线
+
 ## ABC-5（环境类）：临时故障与网络
 
 - 现象：DeepSeek Key 失效导致 401；SiliconFlow 偶发 SSLError/Timeout；httpx 走系统代理访问本机 502
