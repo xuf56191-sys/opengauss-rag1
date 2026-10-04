@@ -1,8 +1,9 @@
-"""FastAPI wrapper: POST /ask -> answer6.answer().
+"""FastAPI wrapper: POST /ask (RAG 基线) + POST /agent (单 Agent)。
 
-把 answer6.answer() 的 RAG 问答能力封装成 HTTP 接口：
+把能力封装成 HTTP 接口：
   - GET  /health  健康检查，返回向量库状态
-  - POST /ask     接收用户问题，返回答案 + 引用校验 + 检索上下文
+  - POST /ask     原 RAG 链路：答案 + 引用校验 + 检索上下文（保持不变）
+  - POST /agent   单 Agent + 工具调用 + 证据/拒答门闩（阶段 5 新增）
 """
 
 import sys
@@ -31,6 +32,11 @@ load_dotenv(ROOT / ".env", override=True)
 # 所以这里的 import 位置不符合 PEP8（非文件顶部），显式忽略该告警。
 from answer6 import answer  # noqa: E402
 from hybrid_retrieve5 import HybridRetriever, CHROMA_DIR, COLLECTION  # noqa: E402
+from agent.service import (  # noqa: E402
+    AgentRequest,
+    AgentResponse,
+    run_agent_service,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -130,3 +136,16 @@ def ask(req: AskRequest) -> AskResponse:
         citation_valid=result.get("citation_valid", True),
         contexts=result.get("contexts", []),
     )
+
+
+@app.post("/agent", response_model=AgentResponse)
+def agent_endpoint(req: AgentRequest) -> AgentResponse:
+    """单 Agent 入口：模型可选工具 → 执行 → 证据/拒答门闩 → 返回可观测结果。
+
+    与 /ask 的区别：/ask 是固定 RAG 链路；/agent 由模型决定用哪些工具。
+    两者共用同一个进程内检索器单例。
+    """
+    # 复用 /ask 的检索器单例：Agent 不额外建索引
+    hr = get_retriever()
+    # service 内部已兜底异常（落到 error 字段），所以这里不再抛 500
+    return run_agent_service(req.query, max_steps=req.max_steps, hr=hr)
