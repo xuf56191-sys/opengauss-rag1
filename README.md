@@ -190,18 +190,22 @@ python src\answer6.py "今天西安天气怎么样？"
 
 ### Docker
 
+**完整步骤（含局域网/公网共享、常见报错处理）见 [docs/DEPLOY.md](docs/DEPLOY.md)。**
+
+最快路径：
+
 ```powershell
 # 需要本机已安装 Docker Desktop
 copy .env.example .env        # 填好两个 Key
 python src\ingest3.py         # 先在宿主机入库，生成 ./data/chroma
-docker compose up --build
-curl http://127.0.0.1:8000/health
+docker compose up --build     # compose 已设 PORT=8000，端口映射 8000:8000
+Invoke-RestMethod http://127.0.0.1:8000/health
 ```
 
 - 密钥通过 `env_file` 注入，**不打进镜像**（`.env` 在 `.dockerignore` 中）
-- 向量库以只读卷挂载复用，容器内不重复嵌入
-- 如需在容器内入库：`docker compose run --rm api python src/ingest3.py`
-- 未在本仓库验证镜像构建（开发机未安装 Docker）；**启动命令与路径假设已用「模拟容器目录 + 环境变量注入」在宿主机验证**（`api7:app --app-dir src`、`CHROMA_DIR=/app/data/chroma`、`/health` 与两个接口均正常）
+- 向量库以只读卷挂载复用，容器内不重复嵌入；也可删掉 compose 里的 `volumes` 让容器首次启动自动入库
+- 镜像内默认端口是 **7860**（为 Hugging Face Spaces 准备）；本地 compose 用 `PORT=8000` 覆盖
+- 未在本仓库验证镜像构建（开发机未安装 Docker）；**启动命令与路径逻辑已在宿主机实测**（见 `docs/DEPLOY.md` 最后一节）
 
 ### 部署到 Hugging Face Spaces（免绑卡，推荐）
 
