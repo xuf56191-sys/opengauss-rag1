@@ -27,6 +27,11 @@ services:
         value: https://api.deepseek.com
       - key: LLM_MODEL
         value: deepseek-chat
+      # 限流与每日预算（防公开地址被刷额度）：0 表示关闭
+      - key: RATE_LIMIT_PER_MIN
+        value: "10"
+      - key: RATE_LIMIT_PER_DAY
+        value: "200"
       # 下面三个是密钥：sync: false 表示不进仓库，只在 Render 面板填写
       - key: SILICONFLOW_API_KEY
         sync: false

@@ -9,11 +9,13 @@
 import os
 import secrets
 import sys
+import threading
+import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------
@@ -110,6 +112,82 @@ def require_api_key(x_api_key: Optional[str] = Header(default=None)) -> None:
 
 
 # ---------------------------------------------------------------------------
+# 限流与每日预算（防公开地址被刷额度）
+# ---------------------------------------------------------------------------
+# 取舍（必须知道边界）：
+# - 内存实现，单进程有效；重启即清零，多实例/多 worker 各自计数
+# - 只有「每 IP 每分钟」+「全局每日总量」两层，够挡误用/爬虫，不是商用级网关
+# - 想要持久化配额，应换 Redis 计数（本项目明确不做）
+RATE_LIMIT_PER_MIN = int(os.getenv("RATE_LIMIT_PER_MIN", "10"))   # 0 = 关闭
+RATE_LIMIT_PER_DAY = int(os.getenv("RATE_LIMIT_PER_DAY", "200"))  # 0 = 关闭
+
+_rate_lock = threading.Lock()
+_ip_hits: Dict[str, List[float]] = {}
+_day_key: str = ""
+_day_count: int = 0
+
+
+def _client_ip(request: Request) -> str:
+    """取真实客户端 IP。
+
+    Render / 反向代理后 request.client.host 是代理地址，必须读 X-Forwarded-For 第一跳；
+    未经过可信代理时该头可伪造，所以这层限流只用于「防误用」，不作为安全边界。
+    """
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _today() -> str:
+    return time.strftime("%Y-%m-%d", time.gmtime())
+
+
+def check_rate_limit(client_id: str, now: Optional[float] = None) -> Optional[int]:
+    """返回 None 表示放行；否则返回建议的 Retry-After 秒数。"""
+    global _day_key, _day_count
+    ts = time.time() if now is None else now
+
+    with _rate_lock:
+        if RATE_LIMIT_PER_DAY > 0:
+            today = _today()
+            if _day_key != today:
+                _day_key, _day_count = today, 0
+            if _day_count >= RATE_LIMIT_PER_DAY:
+                return 3600  # 已耗尽当日预算，建议一小时后重试
+
+        if RATE_LIMIT_PER_MIN > 0:
+            hits = [t for t in _ip_hits.get(client_id, []) if ts - t < 60]
+            if len(hits) >= RATE_LIMIT_PER_MIN:
+                _ip_hits[client_id] = hits
+                return max(1, int(60 - (ts - hits[0])) + 1)
+            hits.append(ts)
+            _ip_hits[client_id] = hits
+
+        if RATE_LIMIT_PER_DAY > 0:
+            _day_count += 1
+    return None
+
+
+def reset_rate_state() -> None:
+    """仅测试使用：清空计数。"""
+    global _day_key, _day_count
+    with _rate_lock:
+        _ip_hits.clear()
+        _day_key, _day_count = "", 0
+
+
+def enforce_rate_limit(request: Request) -> None:
+    retry = check_rate_limit(_client_ip(request))
+    if retry is not None:
+        raise HTTPException(
+            status_code=429,
+            detail="rate limit exceeded, please retry later",
+            headers={"Retry-After": str(retry)},
+        )
+
+
+# ---------------------------------------------------------------------------
 # 路由
 # ---------------------------------------------------------------------------
 @app.get("/health")
@@ -131,7 +209,11 @@ def health() -> Dict:
 
 
 @app.post("/ask", response_model=AskResponse)
-def ask(req: AskRequest, _: None = Depends(require_api_key)) -> AskResponse:
+def ask(
+    req: AskRequest,
+    _auth: None = Depends(require_api_key),
+    _rate: None = Depends(enforce_rate_limit),
+) -> AskResponse:
     """接收用户问题，调用 RAG 问答主流程并返回结构化结果。"""
     # 复用进程内单例检索器，避免每次 /ask 重建 BM25
     hr = get_retriever()
@@ -160,7 +242,11 @@ def ask(req: AskRequest, _: None = Depends(require_api_key)) -> AskResponse:
 
 
 @app.post("/agent", response_model=AgentResponse)
-def agent_endpoint(req: AgentRequest, _: None = Depends(require_api_key)) -> AgentResponse:
+def agent_endpoint(
+    req: AgentRequest,
+    _auth: None = Depends(require_api_key),
+    _rate: None = Depends(enforce_rate_limit),
+) -> AgentResponse:
     """单 Agent 入口：模型可选工具 → 执行 → 证据/拒答门闩 → 返回可观测结果。
 
     与 /ask 的区别：/ask 是固定 RAG 链路；/agent 由模型决定用哪些工具。
