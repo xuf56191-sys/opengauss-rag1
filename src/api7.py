@@ -6,12 +6,14 @@
   - POST /agent   单 Agent + 工具调用 + 证据/拒答门闩（阶段 5 新增）
 """
 
+import os
+import secrets
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------
@@ -89,6 +91,25 @@ def get_retriever() -> HybridRetriever:
 
 
 # ---------------------------------------------------------------------------
+# 最小访问控制
+# ---------------------------------------------------------------------------
+# 设计取舍：
+# - 只在配置了 API_ACCESS_KEY 时启用；未配置 = 本地开发不鉴权（不破坏 CLI/测试/本地体验）
+# - /health 不鉴权，供平台健康检查与探活
+# - 用 compare_digest 常量时间比较，避免计时侧信道
+# - 这是「防误用/防被刷额度」的最小方案，不是完整用户体系（无账号、无配额、无审计）
+API_ACCESS_KEY = os.getenv("API_ACCESS_KEY", "").strip()
+
+
+def require_api_key(x_api_key: Optional[str] = Header(default=None)) -> None:
+    """FastAPI 依赖：校验 X-API-Key。未配置 API_ACCESS_KEY 时直接放行。"""
+    if not API_ACCESS_KEY:
+        return
+    if not x_api_key or not secrets.compare_digest(x_api_key, API_ACCESS_KEY):
+        raise HTTPException(status_code=401, detail="invalid or missing X-API-Key")
+
+
+# ---------------------------------------------------------------------------
 # 路由
 # ---------------------------------------------------------------------------
 @app.get("/health")
@@ -110,7 +131,7 @@ def health() -> Dict:
 
 
 @app.post("/ask", response_model=AskResponse)
-def ask(req: AskRequest) -> AskResponse:
+def ask(req: AskRequest, _: None = Depends(require_api_key)) -> AskResponse:
     """接收用户问题，调用 RAG 问答主流程并返回结构化结果。"""
     # 复用进程内单例检索器，避免每次 /ask 重建 BM25
     hr = get_retriever()
@@ -139,7 +160,7 @@ def ask(req: AskRequest) -> AskResponse:
 
 
 @app.post("/agent", response_model=AgentResponse)
-def agent_endpoint(req: AgentRequest) -> AgentResponse:
+def agent_endpoint(req: AgentRequest, _: None = Depends(require_api_key)) -> AgentResponse:
     """单 Agent 入口：模型可选工具 → 执行 → 证据/拒答门闩 → 返回可观测结果。
 
     与 /ask 的区别：/ask 是固定 RAG 链路；/agent 由模型决定用哪些工具。

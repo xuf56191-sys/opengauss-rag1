@@ -192,6 +192,35 @@ curl http://127.0.0.1:8000/health
 - 如需在容器内入库：`docker compose run --rm api python src/ingest3.py`
 - 未在本仓库验证镜像构建（开发机未安装 Docker）；**启动命令与路径假设已用「模拟容器目录 + 环境变量注入」在宿主机验证**（`api7:app --app-dir src`、`CHROMA_DIR=/app/data/chroma`、`/health` 与两个接口均正常）
 
+### 部署到 Render（免费档，供他人访问）
+
+仓库自带 `render.yaml`（Docker 运行）与 `docker-entrypoint.py`（缺索引则自动入库）。
+
+**你需要做的**：
+
+1. 把仓库推到 GitHub（Render 从仓库拉代码构建）
+2. Render 控制台 → **New → Blueprint** → 选择本仓库
+3. 按提示填写两个密钥：`SILICONFLOW_API_KEY`、`DEEPSEEK_API_KEY`
+   （`API_ACCESS_KEY` 由 Render 自动生成，部署后在 Environment 页复制）
+4. 等待构建完成，访问 `https://<你的服务>.onrender.com/health`
+
+**调用方式**（`/ask`、`/agent` 需要带 Key；`/health` 公开）：
+
+```bash
+curl -X POST "https://<你的服务>.onrender.com/ask" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: <API_ACCESS_KEY>" \
+  -d '{"query":"enable_dolphin_proto 是干什么的？","k":3}'
+```
+
+**已知限制（部署相关）**：
+
+- 免费实例**空闲会休眠**，唤醒时要冷启动；若磁盘被重置还要重建索引，首次请求约 30~60s
+- 磁盘是临时的：容器重建后重新入库（语料仅两份 md，约 120 chunks，成本很小）
+- 公开地址会消耗你的 API 额度，因此默认启用 `X-API-Key`；这**不是完整鉴权体系**（无账号/配额/审计）
+- **镜像构建未在本机验证**（开发机无 Docker）；但 `docker-entrypoint.py` 的两种路径已在 Windows 实测：
+  ① 已有索引 → 直接启动（`/health` 返回 120 chunks）；② 空目录 → 自动入库后再启动（同样 120 chunks）
+
 ### 离线评测与消融
 
 ```powershell

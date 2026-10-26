@@ -1,0 +1,36 @@
+# Render Blueprint：连上 GitHub 仓库即可一键创建 Web 服务（Docker 运行）
+#
+# 使用步骤：
+#   1) 在 Render 控制台 New → Blueprint，选择本仓库
+#   2) 首次创建时按提示填入 SILICONFLOW_API_KEY / DEEPSEEK_API_KEY
+#   3) API_ACCESS_KEY 由 Render 自动生成（也可自己填），之后调用接口要带 X-API-Key
+#
+# 免费实例注意：
+# - 空闲一段时间会休眠，下次请求需冷启动（含首次建索引），首屏会慢 30~60s
+# - 磁盘是临时的：容器重建后会重新建索引（语料只有两份 md，成本可控）
+services:
+  - type: web
+    name: opengauss-rag
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: CHROMA_DIR
+        value: /app/data/chroma
+      - key: EMBED_BASE_URL
+        value: https://api.siliconflow.cn/v1
+      - key: EMBED_MODEL
+        value: BAAI/bge-m3
+      - key: LLM_BASE_URL
+        value: https://api.deepseek.com
+      - key: LLM_MODEL
+        value: deepseek-chat
+      # 下面三个是密钥：sync: false 表示不进仓库，只在 Render 面板填写
+      - key: SILICONFLOW_API_KEY
+        sync: false
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: API_ACCESS_KEY
+        generateValue: true
