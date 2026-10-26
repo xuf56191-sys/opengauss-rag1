@@ -129,8 +129,8 @@ ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -R 80:localhost:8000 n
 需要云主机或支持 Docker 的平台：
 
 - **有 VPS**：把仓库拉上去，`docker compose up -d`，用 Nginx/Caddy 反代 8000 并配 HTTPS
-- **Render**：仓库已有 `render.yaml`，但新账号要求绑卡验证
-- **Hugging Face Spaces**：Docker SDK 目前对部分账号是付费档
+- **云平台**：Render 新账号要求绑卡做身份验证；Hugging Face Spaces 的 Docker SDK 目前对部分账号是付费档。
+  以后若绑卡或升级，用同一份 `Dockerfile` 即可部署，无需改代码。
 
 ---
 

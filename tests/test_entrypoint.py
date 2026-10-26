@@ -1,7 +1,7 @@
 """部署入口脚本的单测（全离线）。
 
 覆盖：
-- 端口解析：PORT → APP_PORT → 默认 7860
+- 端口解析：PORT → APP_PORT → 默认 8000
 - 向量库目录：可写就用；不可写回退到 /tmp/chroma
 - 索引判定：空目录 / 有文件 / 不存在
 """
@@ -30,8 +30,8 @@ def test_port_falls_back_to_app_port() -> None:
     assert entry.resolve_port({"APP_PORT": "7861"}) == "7861"
 
 
-def test_port_default_is_hf_space_port() -> None:
-    assert entry.resolve_port({}) == "7860"
+def test_port_default_is_8000() -> None:
+    assert entry.resolve_port({}) == "8000"
 
 
 def test_port_env_wins_over_app_port() -> None:

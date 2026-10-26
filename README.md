@@ -1,14 +1,3 @@
----
-title: openGauss RAG + Agent
-emoji: 🐘
-colorFrom: blue
-colorTo: gray
-sdk: docker
-app_port: 7860
-pinned: false
-license: mit
----
-
 # opengauss-rag
 
 openGauss **配置问答助手**：固定 RAG 链路 + 单 Agent（工具调用）。
@@ -204,35 +193,8 @@ Invoke-RestMethod http://127.0.0.1:8000/health
 
 - 密钥通过 `env_file` 注入，**不打进镜像**（`.env` 在 `.dockerignore` 中）
 - 向量库以只读卷挂载复用，容器内不重复嵌入；也可删掉 compose 里的 `volumes` 让容器首次启动自动入库
-- 镜像内默认端口是 **7860**（为 Hugging Face Spaces 准备）；本地 compose 用 `PORT=8000` 覆盖
+- 镜像内默认端口是 **8000**；compose 与 `docker run` 都用 `PORT` 环境变量覆盖
 - 未在本仓库验证镜像构建（开发机未安装 Docker）；**启动命令与路径逻辑已在宿主机实测**（见 `docs/DEPLOY.md` 最后一节）
-
-### 部署到 Hugging Face Spaces（免绑卡，推荐）
-
-仓库已带 Space 元数据（README 顶部 YAML：`sdk: docker`、`app_port: 7860`），可直接作为 Docker Space 运行。
-
-**步骤**：
-
-1. 注册/登录 https://huggingface.co → **New → Space**
-2. 填名称，**SDK 选 Docker**，硬件选 **CPU basic（免费）**，可见性自选
-3. 在 Space 的 **Settings → Variables and secrets** 里添加 **Secrets**：
-   - `SILICONFLOW_API_KEY`
-   - `DEEPSEEK_API_KEY`
-   - `API_ACCESS_KEY`（自己定一串随机密码，调用时用）
-   可选 **Variables**：`RATE_LIMIT_PER_MIN=10`、`RATE_LIMIT_PER_DAY=200`
-4. 把本仓库代码推到这个 Space 仓库（Space 默认分支是 `main`）：
-
-```bash
-git remote add space https://huggingface.co/spaces/<你的用户名>/<space名>
-git push space master:main
-```
-
-推送时会要求账号密码：用户名填 HF 用户名，密码填 **Access Token**（Settings → Access tokens，需 write 权限）。
-
-5. 构建完成后访问 `https://<用户名>-<space名>.hf.space/health`（HF 首次构建约 3~6 分钟）
-
-**关于存储**：HF 容器以 uid=1000 运行，`/app` 可能不可写，入口脚本会自动回退到 `/tmp/chroma` 并在日志里打印实际路径。
-容器重启后索引会重建（语料仅两份 md，约 120 chunks，成本很小）。
 
 ### 零成本公网演示（免注册、免绑卡）
 
@@ -249,36 +211,12 @@ git push space master:main
 - 免费隧道可能被服务端断开，重连即可；不适合长期对外
 - 同一局域网更简单：服务监听 `0.0.0.0`，同事直接访问 `http://<你的内网IP>:8000/docs`
 
-> 为什么不做成“我这边长期挂着”：隧道进程必须依附于运行它的终端/机器，云平台才是长期方案。
-> 需要长期在线时，按上面的 HF Spaces / Render 走（前者免卡但目前需要付费档才能选 Docker SDK）。
+> 为什么不做成「我这边长期挂着」：隧道进程必须依附于运行它的终端/机器。
+> 需要长期在线时，用云主机跑同一份 Docker 镜像（`docs/DEPLOY.md` 第 4.3 节）。
 
-### 部署到 Render（需绑卡验证）
+### 成本与访问控制
 
-仓库也带 `render.yaml`（Docker 运行）。Render 对新账号要求绑卡做身份验证（$1 预授权，不扣款），
-免费实例本身不收费。若你不方便绑卡，用上面的 HF Spaces 方案。
-
-**步骤**：Render 控制台 → **New → Blueprint** → 选本仓库 → 填两个 Key → Deploy。
-（手动建 Web Service 也可以，但要自己加环境变量，且不会自动读 `render.yaml`。）
-
-**调用方式**（`/ask`、`/agent` 需要带 Key；`/health` 公开）：
-
-```bash
-curl -X POST "https://<你的域名>/ask" \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: <API_ACCESS_KEY>" \
-  -d '{"query":"enable_dolphin_proto 是干什么的？","k":3}'
-```
-
-**已知限制（部署相关）**：
-
-- 免费实例**空闲会休眠**，唤醒时要冷启动；若磁盘被重置还要重建索引，首次请求约 30~60s
-- 磁盘是临时的：容器重建后重新入库（语料仅两份 md，约 120 chunks，成本很小）
-- **镜像构建未在本机验证**（开发机无 Docker）；但 `docker-entrypoint.py` 的两种路径已在 Windows 实测：
-  ① 已有索引 → 直接启动（`/health` 返回 120 chunks）；② 空目录 → 自动入库后再启动（同样 120 chunks）
-
-#### 成本与访问控制
-
-公开部署后，**钱只花在 LLM/嵌入 API 上**（Render 免费档本身不收费）。本项目做了三层：
+公开部署后，**钱只花在 LLM/嵌入 API 上**。本项目做了三层：
 
 | 层 | 做法 | 边界 |
 |----|------|------|

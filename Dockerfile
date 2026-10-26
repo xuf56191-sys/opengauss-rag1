@@ -21,11 +21,11 @@ COPY personal/ ./personal/
 COPY data/ ./data/
 COPY docker-entrypoint.py ./
 
-EXPOSE 7860
+EXPOSE 8000
 
-# 健康检查用标准库，不额外安装 curl；端口跟随 PORT/APP_PORT（默认 7860）
+# 健康检查用标准库，不额外安装 curl；端口跟随 PORT/APP_PORT（默认 8000）
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
-    CMD python -c "import os,sys,urllib.request; p=os.environ.get('PORT') or os.environ.get('APP_PORT') or '7860'; sys.exit(0 if urllib.request.urlopen(f'http://127.0.0.1:{p}/health', timeout=3).status == 200 else 1)"
+    CMD python -c "import os,sys,urllib.request; p=os.environ.get('PORT') or os.environ.get('APP_PORT') or '8000'; sys.exit(0 if urllib.request.urlopen(f'http://127.0.0.1:{p}/health', timeout=3).status == 200 else 1)"
 
 # 入口脚本：缺索引则先入库，再启动（支持平台注入 $PORT）
 ENTRYPOINT ["python", "/app/docker-entrypoint.py"]

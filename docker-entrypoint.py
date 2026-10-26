@@ -5,9 +5,9 @@
 - 避免 CRLF / 可执行权限在镜像里的常见坑。
 
 设计要点：
-1. **可写目录回退**：HF Spaces 以 uid=1000 运行，`/app` 可能不可写；
+1. **可写目录回退**：某些平台容器以非 root 运行、`/app` 不可写；
    这里按 CHROMA_DIR → /app/data/chroma → /tmp/chroma 依次探测可写性；
-2. **端口**：PORT（Render 注入）→ APP_PORT → 7860（HF Spaces 默认）；
+2. **端口**：PORT → APP_PORT → 默认 8000；
 3. 缺索引时运行 ingest3 建库；失败不阻塞启动，但 /health 会报错便于发现；
 4. `os.execvp` 启动 uvicorn（不额外留一层父进程）。
 """
@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-DEFAULT_PORT = "7860"
+DEFAULT_PORT = "8000"
 FALLBACK_CHROMA = Path("/tmp/chroma")
 
 
