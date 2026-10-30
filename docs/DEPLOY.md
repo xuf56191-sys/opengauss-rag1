@@ -190,6 +190,10 @@ docker logs -f rag
 
 ## 8. 交付状态说明（别对外夸大）
 
-- `Dockerfile` 的**启动命令与入口逻辑**已在 Windows 上实测（不通过 Docker，而是直接跑 `docker-entrypoint.py` 的两种路径）
-- **镜像构建本身未验证**（开发机没装 Docker），所以第一次 `docker compose up --build` 可能遇到环境差异问题——把报错贴回来即可定位
-- 生产化缺口：无鉴权体系（只有共享 Key）、无限流（内存版）、无持久化配额、无压测
+- 已在 **Windows 11 + WSL 2.7.14 + Docker Desktop 4.97** 上完成实测：
+  - `docker-compose build` 成功（`Successfully tagged opengauss-rag:0.1`）
+  - 容器 `Up (healthy)`，`GET /health` 返回 `chunks=120`
+  - `POST /ask`：配置题返回带 `[1][2]` 的回答；天气题 `refused=true / high_vector_distance`
+  - `POST /agent`：配置题走 `get_config_detail`（`steps=2`）；天气题 `refused=true / no_evidence`
+- 生产化缺口：无账号体系（只有共享 `X-API-Key`）、限流是内存版单进程、无持久化配额、无压测与监控
+- 部署过程中的三个真实坑（已沉淀进本文档）：Docker Hub 需代理、构建阶段 pip 需镜像源、Chroma 卷不能只读

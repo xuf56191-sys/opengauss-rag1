@@ -194,7 +194,7 @@ Invoke-RestMethod http://127.0.0.1:8000/health
 - 密钥通过 `env_file` 注入，**不打进镜像**（`.env` 在 `.dockerignore` 中）
 - 向量库以只读卷挂载复用，容器内不重复嵌入；也可删掉 compose 里的 `volumes` 让容器首次启动自动入库
 - 镜像内默认端口是 **8000**；compose 与 `docker run` 都用 `PORT` 环境变量覆盖
-- 未在本仓库验证镜像构建（开发机未安装 Docker）；**启动命令与路径逻辑已在宿主机实测**（见 `docs/DEPLOY.md` 最后一节）
+- **已在 Windows 11 + Docker Desktop 4.97（WSL2）实测通过**：镜像构建成功、容器健康检查 200、`chunks=120`，`/ask` 与 `/agent` 的问答与拒答行为均验证（详见 `docs/DEPLOY.md`）
 
 ### 零成本公网演示（免注册、免绑卡）
 
@@ -310,7 +310,7 @@ no_hits
 - Agent 可能对已检索内容添油加醋：**未实现逐句溯源校验**
 - 未做 cross-encoder 重排；标题短块偶尔排位偏高
 - 拒答阈值依赖当前语料分布，扩充后必须重跑 `peek_signals` / `eval8` / `agent_eval`
-- **未做生产部署**：无鉴权、无限流、无并发压测、无观测；Dockerfile 已提供但未在本机验证构建（本机未安装 Docker）
+- **未做生产化部署**：无账号体系、无持久化配额、无并发压测与监控；已用 Docker 在本机完成容器化运行验证（Windows 11 + Docker Desktop 4.97 / WSL2）
 - Agent 为**单 Agent**：不做 Multi-Agent、不做 MCP
 
 ## 相关项目
