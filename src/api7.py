@@ -112,17 +112,28 @@ def require_api_key(x_api_key: Optional[str] = Header(default=None)) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 限流与每日预算（防公开地址被刷额度）
+# 限流与配额（防公开地址被刷额度）
 # ---------------------------------------------------------------------------
 # 取舍（必须知道边界）：
 # - 内存实现，单进程有效；重启即清零，多实例/多 worker 各自计数
-# - 只有「每 IP 每分钟」+「全局每日总量」两层，够挡误用/爬虫，不是商用级网关
-# - 想要持久化配额，应换 Redis 计数（本项目明确不做）
+# - 三层：每 IP 总次数配额（白名单豁免） + 每 IP 每分钟 + 全局每日总量
+# - 只用于「防误用/防刷」，不是商用级网关；要持久化配额应换 Redis
 RATE_LIMIT_PER_MIN = int(os.getenv("RATE_LIMIT_PER_MIN", "10"))   # 0 = 关闭
 RATE_LIMIT_PER_DAY = int(os.getenv("RATE_LIMIT_PER_DAY", "200"))  # 0 = 关闭
+# 每个 IP 的**总**调用次数上限（0 = 关闭）。给「只让朋友试几次」的场景用
+RATE_LIMIT_TOTAL_PER_IP = int(os.getenv("RATE_LIMIT_TOTAL_PER_IP", "0"))
+# 白名单 IP：不受任何限流（容器内看到的客户端 IP 往往是 docker 网关，因此更推荐用 OWNER_KEY）
+RATE_LIMIT_EXEMPT_IPS = {
+    ip.strip()
+    for ip in os.getenv("RATE_LIMIT_EXEMPT_IPS", "").split(",")
+    if ip.strip()
+}
+# 主人密钥：请求头 X-Owner-Key 命中则不限额（自己演示用；公网部署时不要外传）
+OWNER_KEY = os.getenv("OWNER_KEY", "").strip()
 
 _rate_lock = threading.Lock()
 _ip_hits: Dict[str, List[float]] = {}
+_ip_total: Dict[str, int] = {}
 _day_key: str = ""
 _day_count: int = 0
 
@@ -143,19 +154,44 @@ def _today() -> str:
     return time.strftime("%Y-%m-%d", time.gmtime())
 
 
-def check_rate_limit(client_id: str, now: Optional[float] = None) -> Optional[int]:
-    """返回 None 表示放行；否则返回建议的 Retry-After 秒数。"""
+def check_rate_limit(
+    client_id: str,
+    now: Optional[float] = None,
+    owner: bool = False,
+) -> Optional[int]:
+    """返回 None 表示放行；否则返回建议的 Retry-After 秒数。
+
+    顺序：主人密钥 → 白名单 IP → 每 IP 总配额 → 全局每日 → 每 IP 每分钟。
+    """
     global _day_key, _day_count
     ts = time.time() if now is None else now
 
     with _rate_lock:
+        # 0) 主人：完全放行
+        if owner:
+            return None
+
+        # 1) 白名单 IP 完全放行
+        if client_id in RATE_LIMIT_EXEMPT_IPS:
+            return None
+
+        # 2) 每 IP 总配额：用完后不再恢复（重启进程才清零）
+        if RATE_LIMIT_TOTAL_PER_IP > 0:
+            used = _ip_total.get(client_id, 0)
+            if used >= RATE_LIMIT_TOTAL_PER_IP:
+                return 86400
+            _ip_total[client_id] = used + 1
+
+        # 3) 全局每日预算
         if RATE_LIMIT_PER_DAY > 0:
             today = _today()
             if _day_key != today:
                 _day_key, _day_count = today, 0
             if _day_count >= RATE_LIMIT_PER_DAY:
-                return 3600  # 已耗尽当日预算，建议一小时后重试
+                return 3600
+            _day_count += 1
 
+        # 4) 每 IP 每分钟
         if RATE_LIMIT_PER_MIN > 0:
             hits = [t for t in _ip_hits.get(client_id, []) if ts - t < 60]
             if len(hits) >= RATE_LIMIT_PER_MIN:
@@ -164,8 +200,6 @@ def check_rate_limit(client_id: str, now: Optional[float] = None) -> Optional[in
             hits.append(ts)
             _ip_hits[client_id] = hits
 
-        if RATE_LIMIT_PER_DAY > 0:
-            _day_count += 1
     return None
 
 
@@ -174,11 +208,17 @@ def reset_rate_state() -> None:
     global _day_key, _day_count
     with _rate_lock:
         _ip_hits.clear()
+        _ip_total.clear()
         _day_key, _day_count = "", 0
 
 
-def enforce_rate_limit(request: Request) -> None:
-    retry = check_rate_limit(_client_ip(request))
+def enforce_rate_limit(
+    request: Request,
+    x_owner_key: Optional[str] = Header(default=None, alias="X-Owner-Key"),
+) -> None:
+    """限流依赖：带对 X-Owner-Key 的主人不受限；其他人走每 IP 配额。"""
+    owner = bool(OWNER_KEY) and bool(x_owner_key) and secrets.compare_digest(x_owner_key, OWNER_KEY)
+    retry = check_rate_limit(_client_ip(request), owner=owner)
     if retry is not None:
         raise HTTPException(
             status_code=429,

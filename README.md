@@ -221,7 +221,9 @@ Invoke-RestMethod http://127.0.0.1:8000/health
 | 层 | 做法 | 边界 |
 |----|------|------|
 | 访问密钥 | `API_ACCESS_KEY`（**你自己定的随机串**，不是厂商 Key），请求头 `X-API-Key` | 共享单钥：拿到的人仍可调用 |
-| 每 IP 限流 | `RATE_LIMIT_PER_MIN`（默认 10 次/分钟/IP）超限返回 **429 + Retry-After** | 内存计数、单进程；重启清零 |
+| 每 IP 总配额 | `RATE_LIMIT_TOTAL_PER_IP`（如 3）：每个 IP 总共只能问 N 次，之后 **429** | 内存计数，重启容器才重置 |
+| 主人豁免 | `OWNER_KEY` + 请求头 `X-Owner-Key`：命中则**完全不受限** | 容器里按 IP 判断不可靠（看到的是 docker 网关），所以用密钥识别身份 |
+| 每 IP 限流 | `RATE_LIMIT_PER_MIN`（默认 10 次/分钟/IP）超限返回 **429 + Retry-After** | 内存计数、单进程 |
 | 每日总量 | `RATE_LIMIT_PER_DAY`（默认 200 次/天，全局） | 同上，且多实例不共享 |
 
 **这些不是商用网关**：无账号体系、无持久化配额、`X-Forwarded-For` 在不经过可信代理时可伪造。

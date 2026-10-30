@@ -146,6 +146,41 @@ ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -R 80:localhost:8000 n
 
 ---
 
+## 4.4 三种身份与配额（控制 token 消耗）
+
+| 身份 | 怎么识别 | 限制 |
+|------|----------|------|
+| 主人（你） | 请求头 `X-Owner-Key: <OWNER_KEY>` | **完全不受限** |
+| 白名单 IP | `RATE_LIMIT_EXEMPT_IPS` 里列出的 IP | 不受限（**容器里不可靠**，见下） |
+| 其他人 | 其余请求 | 每 IP 总共 `RATE_LIMIT_TOTAL_PER_IP` 次（如 3），之后 **429** |
+
+配置（写进 `.env` 后 `docker compose up -d` 生效）：
+
+```text
+RATE_LIMIT_TOTAL_PER_IP=3
+OWNER_KEY=<自己生成的随机串>
+RATE_LIMIT_PER_MIN=10
+RATE_LIMIT_PER_DAY=200
+```
+
+**为什么用密钥而不是 IP 识别主人**：
+容器里 `request.client.host` 看到的是 **docker 网关 IP（如 172.18.0.1）**，不是 `127.0.0.1`；
+所以「本机 IP 白名单」在 Docker 部署下会失效（实测第 4 次就 429）。改成 `X-Owner-Key` 按身份判断才可靠。
+
+**Swagger 里怎么用**：`/docs` → `POST /ask` → Try it out，会出现两个可选 header：
+`X-API-Key`（如果启用了 `API_ACCESS_KEY`）与 **`X-Owner-Key`**（填主人密钥即不限次）。
+
+**验证方式**（本地实测）：
+
+```text
+无密钥 4 次：200, 200, 200, 429(Retry-After: 86400)
+带 X-Owner-Key 5 次：200, 200, 200, 200, 200
+```
+
+**边界**：计数在内存，重启容器清零；多实例不共享；`X-Forwarded-For` 可伪造（只防误用，不是安全边界）。
+
+---
+
 ## 5. 常见问题
 
 | 现象 | 原因 | 处理 |
