@@ -12,8 +12,13 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 # 依赖单独一层，源码改动不会触发重新装包
+# PIP_INDEX_URL 可在构建时覆盖：国内环境建议用镜像源（构建阶段的 pip 不走 Docker 的代理设置）
+ARG PIP_INDEX_URL=https://pypi.org/simple
+# 可选：构建阶段走代理（不传则为空）
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -i "$PIP_INDEX_URL" -r requirements.txt
 
 # 只复制运行所需内容（.dockerignore 排除 .venv/.env/向量库等）
 COPY src/ ./src/

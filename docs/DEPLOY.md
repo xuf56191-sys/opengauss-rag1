@@ -51,8 +51,17 @@ API_ACCESS_KEY=...        # 可选：设了就要带 X-API-Key 才能调 /ask、
 
 ## 2. 启动
 
+> **两个必踩的坑（Windows + 国内网络）**
+>
+> 1. **拉基础镜像需要代理**：Docker Hub 直连不通，报 `Docker Desktop has no HTTPS proxy`。
+>    设置：Docker Desktop → **Settings → Resources → Proxies → Manual**，HTTP/HTTPS 都填 `http://127.0.0.1:<你的代理端口>`（如 7897），Apply & restart。
+>    **不需要**开 Windows 系统代理。
+> 2. **构建阶段的 pip 不走 Docker 的代理**，会卡在 `pip install`。
+>    已内置解决：`Dockerfile` 支持 `ARG PIP_INDEX_URL`，`docker-compose.yml` 默认用清华源。
+>    海外环境用官方源：`$env:PIP_INDEX_URL="https://pypi.org/simple"; docker-compose build`。
+
 ```powershell
-# 构建 + 启动（首次约 2~5 分钟，取决于网络）
+# 构建 + 启动（首次约 2~5 分钟，慢网可能 15 分钟以上）
 docker compose up --build
 
 # 想后台跑
@@ -74,6 +83,9 @@ docker compose logs -f api
 [entrypoint] exec: ... uvicorn api7:app ... --port 8000
 INFO:     Application startup complete.
 ```
+
+> **卷必须可写**：`docker-compose.yml` 里挂载不能加 `:ro`。
+> Chroma 打开 sqlite 需要写权限；只读挂载会被入口脚本判定「不可用」并回退到 `/tmp/chroma`，导致每次启动都重新入库。
 
 ---
 

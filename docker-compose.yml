@@ -13,7 +13,11 @@
 # - PORT 显式设为 8000，与下面端口映射一致
 services:
   api:
-    build: .
+    build:
+      context: .
+      args:
+        # 国内默认走清华源；海外可 PIP_INDEX_URL=https://pypi.org/simple docker-compose build
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
     image: opengauss-rag:0.1
     ports:
       - "8000:8000"
@@ -23,5 +27,6 @@ services:
       CHROMA_DIR: /app/data/chroma
       PORT: "8000"
     volumes:
-      - ./data/chroma:/app/data/chroma:ro
+      # 注意：不能用 :ro —— Chroma 打开 sqlite 需要写权限，只读挂载会被入口脚本判为不可用并回退到 /tmp
+      - ./data/chroma:/app/data/chroma
     restart: unless-stopped
