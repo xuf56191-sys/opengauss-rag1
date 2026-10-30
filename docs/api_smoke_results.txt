@@ -5,7 +5,7 @@ GET /health status=200
 {
   "status": "ok",
   "collection": "opengauss_docs",
-  "chroma_dir": "D:\\PPT文档\\RAG新项目\\opengauss-rag\\data\\chroma",
+  "chroma_dir": "<repo>/data/chroma",
   "chunks": 120
 }
 
